@@ -29,6 +29,7 @@ import {
   seedDatosIniciales,
   obtenerSesionLocal,
   guardarSesionLocal,
+  obtenerPedidoConDetalle,
 } from './services/supabaseClient'
 
 // ─── Toast de notificación ────────────────────────────────────────────────────
@@ -189,20 +190,24 @@ export default function App() {
   // ── Seed automático + carga inicial ──
   useEffect(() => {
     if (!supabaseConfigurado) return
+    const esAdmin = ['admin', 'superadmin'].includes(usuarioActual?.rol)
     seedDatosIniciales().then(() => {
-      cargarCostos()
-      cargarProduccion()
+      if (esAdmin) {
+        cargarCostos()
+        cargarProduccion()
+      }
     })
     cargarPedidos()
     cargarGastos()
     cargarRetiros()
-  }, [supabaseConfigurado, cargarPedidos, cargarCostos, cargarProduccion, cargarGastos, cargarRetiros])
+  }, [supabaseConfigurado, cargarPedidos, cargarCostos, cargarProduccion, cargarGastos, cargarRetiros, usuarioActual?.rol])
 
   // ── Auto-Refresh al volver a la app (Background -> Foreground) ──
   useEffect(() => {
+    const esAdmin = ['admin', 'superadmin'].includes(usuarioActual?.rol)
     const refrescarSilencioso = () => {
       cargarPedidos(true)
-      cargarProduccion()
+      if (esAdmin) cargarProduccion()
       cargarGastos()
       cargarRetiros()
     }
@@ -243,13 +248,13 @@ export default function App() {
       const { eventType, new: nuevo, old: viejo } = payload
       try {
         if (eventType === 'INSERT') {
-          const pedidosActualizados = await listarPedidosHoy()
-          setPedidos(pedidosActualizados)
+          const pedido = await obtenerPedidoConDetalle(nuevo.id)
+          setPedidos(prev => [pedido, ...prev])
           mostrarToast('🛒 Nuevo pedido recibido')
           reproducirSonidoNotificacion()
         } else if (eventType === 'UPDATE') {
-          const pedidosActualizados = await listarPedidosHoy()
-          setPedidos(pedidosActualizados)
+          const pedido = await obtenerPedidoConDetalle(nuevo.id)
+          setPedidos(prev => prev.map(p => p.id === pedido.id ? pedido : p))
           mostrarToast('✏️  Pedido actualizado')
         } else if (eventType === 'DELETE') {
           setPedidos(prev => prev.filter(p => p.id !== viejo.id))

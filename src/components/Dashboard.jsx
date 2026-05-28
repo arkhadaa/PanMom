@@ -4,7 +4,7 @@
 // ventas y estado de pedidos.
 // =============================================
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, memo } from 'react'
 import {
   DollarSign, AlertCircle, Clock, ChefHat,
   PackageCheck, TrendingUp, TrendingDown, RefreshCw,
@@ -95,6 +95,40 @@ function FormRetiro({ onRegistrar }) {
   )
 }
 
+// ─── Reloj aislado (evita re-render de Dashboard cada 10s) ──────────────────
+const SaludoReloj = memo(function SaludoReloj({ totalPedidos }) {
+  const [horaLocal, setHoraLocal] = useState('')
+  const [saludo, setSaludo]       = useState('')
+
+  useEffect(() => {
+    const actualizar = () => {
+      const ahora = new Date()
+      setHoraLocal(ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }))
+      const h = ahora.getHours()
+      setSaludo(h >= 5 && h < 12 ? '¡Buenos días! 🌅' : h < 20 ? '¡Buenas tardes! ☀️' : '¡Buenas noches! 🌙')
+    }
+    actualizar()
+    const t = setInterval(actualizar, 10000)
+    return () => clearInterval(t)
+  }, [])
+
+  const fechaHoy = new Intl.DateTimeFormat('es-CL', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  }).format(new Date())
+
+  return (
+    <div>
+      <p className="text-xs font-medium text-gray-400 capitalize flex items-center gap-1.5">
+        {fechaHoy} <span className="w-1 h-1 bg-gray-300 rounded-full" /> <span className="font-bold text-gray-500">{horaLocal}</span>
+      </p>
+      <h2 className="text-xl font-bold text-gray-800">{saludo}</h2>
+      <p className="text-sm text-gray-500">
+        {totalPedidos === 0 ? 'Sin pedidos todavía hoy' : `${totalPedidos} pedido${totalPedidos !== 1 ? 's' : ''} hoy`}
+      </p>
+    </div>
+  )
+})
+
 // ─── Dashboard principal ──────────────────────────────────────────────────────
 export default function Dashboard({
   pedidos, produccion, gastos = [], retiros = [],
@@ -165,28 +199,6 @@ export default function Dashboard({
   )
   const hayProduccion = resumenProd.totalCargas > 0
 
-  // Fecha y Hora
-  const fechaHoy = new Intl.DateTimeFormat('es-CL', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  }).format(new Date())
-
-  const [horaLocal, setHoraLocal] = useState('')
-  const [saludo, setSaludo] = useState('¡Buenos días! 🌅')
-
-  useEffect(() => {
-    const actualizarReloj = () => {
-      const ahora = new Date()
-      setHoraLocal(ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }))
-      
-      const hora = ahora.getHours()
-      if (hora >= 5 && hora < 12) setSaludo('¡Buenos días! 🌅')
-      else if (hora >= 12 && hora < 20) setSaludo('¡Buenas tardes! ☀️')
-      else setSaludo('¡Buenas noches! 🌙')
-    }
-    actualizarReloj()
-    const timer = setInterval(actualizarReloj, 10000) // actualizar cada 10 seg
-    return () => clearInterval(timer)
-  }, [])
 
   const handleCerrarCaja = async () => {
     if (!window.confirm('¿Estás seguro de cerrar la caja de hoy? Esto guardará los totales en el historial.')) return
@@ -214,17 +226,7 @@ export default function Dashboard({
 
       {/* ── Saludo ── */}
       <div className="flex items-center justify-between mb-5">
-        <div>
-          <p className="text-xs font-medium text-gray-400 capitalize flex items-center gap-1.5">
-            {fechaHoy} <span className="w-1 h-1 bg-gray-300 rounded-full"></span> <span className="font-bold text-gray-500">{horaLocal}</span>
-          </p>
-          <h2 className="text-xl font-bold text-gray-800">{saludo}</h2>
-          <p className="text-sm text-gray-500">
-            {stats.totalPedidos === 0
-              ? 'Sin pedidos todavía hoy'
-              : `${stats.totalPedidos} pedido${stats.totalPedidos !== 1 ? 's' : ''} hoy`}
-          </p>
-        </div>
+        <SaludoReloj totalPedidos={stats.totalPedidos} />
         <button
           onClick={onRefresh}
           disabled={cargando}

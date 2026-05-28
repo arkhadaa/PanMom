@@ -292,10 +292,13 @@ export function suscribirPedidos(callback) {
 
 /** Lista todos los pedidos pendientes de pago (histórico). */
 export async function listarDeudas() {
+  const hace90dias = new Date()
+  hace90dias.setDate(hace90dias.getDate() - 90)
+
   const { data, error } = await supabase
     .from('pedidos')
     .select(`
-      *, 
+      *,
       clientes ( id, nombre, telefono ),
       pedido_items (
         cantidad,
@@ -305,12 +308,25 @@ export async function listarDeudas() {
     `)
     .eq('pagado', false)
     .neq('estado', 'anulado')
+    .gte('fecha_pedido', hace90dias.toISOString())
     .order('fecha_pedido', { ascending: false })
+    .limit(200)
 
   if (error) {
     console.error('Error listando deudas:', error)
     return []
   }
+  return data
+}
+
+/** Trae un pedido individual con todos sus joins (usado por real-time). */
+export async function obtenerPedidoConDetalle(pedidoId) {
+  const { data, error } = await supabase
+    .from('pedidos')
+    .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, cantidad, precio_unitario, productos ( id, nombre, precio_venta ) )')
+    .eq('id', pedidoId)
+    .single()
+  if (error) throw error
   return data
 }
 
