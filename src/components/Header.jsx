@@ -13,7 +13,14 @@ const TABS = [
   { id: 'costos',     label: 'Config',   Icon: Package         },
 ]
 
-export default function Header({ tabActivo, setTabActivo, conectado }) {
+export default function Header({ tabActivo, setTabActivo, conectado, usuarioActual, onLogout }) {
+  // Filtrar tabs según el rol
+  const tabsVisibles = TABS.filter(t => {
+    if (usuarioActual?.rol === 'vendedor') {
+      return ['dashboard', 'pedidos', 'agregar'].includes(t.id)
+    }
+    return true
+  })
   return (
     <>
       {/* ── HEADER SUPERIOR ── */}
@@ -33,20 +40,30 @@ export default function Header({ tabActivo, setTabActivo, conectado }) {
             {conectado ? (
               <div className="flex items-center gap-1 bg-white/15 rounded-full px-2.5 py-1">
                 <Wifi size={12} className="text-green-300" />
-                <span className="text-xs text-white/90 font-medium">En línea</span>
+                <span className="text-xs text-white/90 font-medium">Online</span>
               </div>
             ) : (
               <div className="flex items-center gap-1 bg-red-500/30 rounded-full px-2.5 py-1">
                 <WifiOff size={12} className="text-red-200" />
-                <span className="text-xs text-white/90 font-medium">Sin conexión</span>
+                <span className="text-xs text-white/90 font-medium">Offline</span>
               </div>
+            )}
+            
+            {usuarioActual && (
+              <button 
+                onClick={onLogout}
+                className="ml-2 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-2.5 py-1 rounded-full transition-colors"
+                title="Cerrar sesión"
+              >
+                Salir
+              </button>
             )}
           </div>
         </div>
 
         {/* ── NAV DESKTOP ── */}
         <nav className="hidden md:flex max-w-4xl mx-auto px-4 gap-1 pb-2">
-          {TABS.map(({ id, label, Icon }) => (
+          {tabsVisibles.map(({ id, label, Icon }) => (
             <button
               key={id}
               onClick={() => setTabActivo(id)}
@@ -64,7 +81,7 @@ export default function Header({ tabActivo, setTabActivo, conectado }) {
 
       {/* ── BOTTOM NAV MOBILE ── */}
       <nav className="bottom-nav md:hidden">
-        {TABS.map(({ id, label, Icon }) => (
+        {tabsVisibles.map(({ id, label, Icon }) => (
           <button
             key={id}
             onClick={() => setTabActivo(id)}

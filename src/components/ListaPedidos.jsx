@@ -62,7 +62,7 @@ function ConfirmarEliminar({ pedido, onConfirmar, onCancelar }) {
 }
 
 // ─── Tarjeta individual de pedido ─────────────────────────────────────────────
-function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar }) {
+function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin }) {
   const [expandido, setExpandido] = useState(false)
   const [cargandoAccion, setCargandoAccion] = useState(null) // 'produciendo' | 'entregado' | 'pago'
 
@@ -184,8 +184,8 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar }) {
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={handleTogglePago}
-          disabled={!!cargandoAccion}
-          className={`badge ${pedido.pagado ? 'badge-pagado' : 'badge-debe'} cursor-pointer hover:opacity-80 transition-opacity`}
+          disabled={!!cargandoAccion || !esAdmin}
+          className={`badge ${pedido.pagado ? 'badge-pagado' : 'badge-debe'} ${esAdmin ? 'cursor-pointer hover:opacity-80' : 'opacity-70'} transition-opacity`}
         >
           {cargandoAccion === 'pago' ? (
             <Loader2 size={11} className="animate-spin" />
@@ -226,14 +226,16 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar }) {
         </button>
 
         {/* Eliminar */}
-        <button
-          onClick={() => onEliminar(pedido)}
-          className="btn-danger"
-          disabled={!!cargandoAccion}
-        >
-          <Trash2 size={13} />
-          Eliminar
-        </button>
+        {esAdmin && (
+          <button
+            onClick={() => onEliminar(pedido)}
+            className="btn-danger"
+            disabled={!!cargandoAccion}
+          >
+            <Trash2 size={13} />
+            Eliminar
+          </button>
+        )}
       </div>
 
       {/* ── Sección expandida: notas ── */}
@@ -256,11 +258,13 @@ const FILTROS = [
   { value: 'entregado',   label: 'Entregados'   },
 ]
 
-export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar }) {
+export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, usuarioActual }) {
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [pedidoEditar, setPedidoEditar] = useState(null)
   const [pedidoEliminar, setPedidoEliminar] = useState(null)
+  
+  const esAdmin = usuarioActual?.rol === 'admin'
 
   // ── Filtrar y buscar pedidos ──
   const pedidosFiltrados = useMemo(() => {
@@ -399,6 +403,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar })
               onActualizar={handleActualizar}
               onEditar={setPedidoEditar}
               onEliminar={setPedidoEliminar}
+              esAdmin={esAdmin}
             />
           ))}
         </div>

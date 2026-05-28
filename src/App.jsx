@@ -12,6 +12,7 @@ import ListaPedidos from './components/ListaPedidos'
 import Insumos from './components/Insumos'
 import Recetas from './components/Recetas'
 import Produccion from './components/Produccion'
+import LoginPIN from './components/LoginPIN'
 import {
   listarPedidosHoy,
   listarProduccionHoy,
@@ -22,12 +23,53 @@ import {
   suscribirPedidos,
   calcularCostosUnitarios,
   seedDatosIniciales,
+  obtenerSesionLocal,
+  guardarSesionLocal,
 } from './services/supabaseClient'
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
+// ─── Toast de notificación ────────────────────────────────────────────────────
 function Toast({ mensaje, visible }) {
   if (!visible) return null
-  return <div className="toast">{mensaje}</div>
+  return (
+    <div className="toast">
+      {mensaje}
+    </div>
+  )
+}
+
+// ─── Sonido de Notificación ───────────────────────────────────────────────────
+function reproducirSonidoNotificacion() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext
+    if (!AudioContext) return
+    const ctx = new AudioContext()
+    
+    // Tono 1
+    const osc1 = ctx.createOscillator()
+    const gain1 = ctx.createGain()
+    osc1.type = 'sine'
+    osc1.frequency.setValueAtTime(880, ctx.currentTime) // Nota A5
+    gain1.gain.setValueAtTime(0.5, ctx.currentTime)
+    gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2)
+    osc1.connect(gain1)
+    gain1.connect(ctx.destination)
+    osc1.start(ctx.currentTime)
+    osc1.stop(ctx.currentTime + 0.2)
+
+    // Tono 2 (más agudo, retardo)
+    const osc2 = ctx.createOscillator()
+    const gain2 = ctx.createGain()
+    osc2.type = 'sine'
+    osc2.frequency.setValueAtTime(1108.73, ctx.currentTime + 0.15) // Nota C#6
+    gain2.gain.setValueAtTime(0.5, ctx.currentTime + 0.15)
+    gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4)
+    osc2.connect(gain2)
+    gain2.connect(ctx.destination)
+    osc2.start(ctx.currentTime + 0.15)
+    osc2.stop(ctx.currentTime + 0.4)
+  } catch (e) {
+    console.warn('Audio no soportado o bloqueado', e)
+  }
 }
 
 // ─── Pantalla de configuración necesaria ──────────────────────────────────────
@@ -60,6 +102,11 @@ export default function App() {
   const [retiros, setRetiros]       = useState([])
   const [cargando, setCargando]     = useState(true)
   const [conectado, setConectado]   = useState(true)
+
+  // Auth State
+  const [usuarioActual, setUsuarioActual] = useState(obtenerSesionLocal())
+
+  // Toasts
   const [toast, setToast]           = useState({ visible: false, mensaje: '' })
   const [costos, setCostos]         = useState(null)
   const [tabCostos, setTabCostos]   = useState('insumos')
@@ -140,16 +187,22 @@ export default function App() {
     cargarRetiros()
   }, [supabaseConfigurado, cargarPedidos, cargarCostos, cargarProduccion, cargarGastos, cargarRetiros])
 
-  // ── Suscripción real-time a pedidos ──
+  // ── Suscripción real-time ──
   useEffect(() => {
     if (!supabaseConfigurado) return
+
     const cancelar = suscribirPedidos(async (payload) => {
-      const { eventType, old: viejo } = payload
+      const { eventType, new: nuevo, old: viejo } = payload
       try {
-        if (eventType === 'INSERT' || eventType === 'UPDATE') {
-          const actualizados = await listarPedidosHoy()
-          setPedidos(actualizados)
-          mostrarToast(eventType === 'INSERT' ? '🛒 Nuevo pedido recibido' : '✏️  Pedido actualizado')
+        if (eventType === 'INSERT') {
+          const pedidosActualizados = await listarPedidosHoy()
+          setPedidos(pedidosActualizados)
+          mostrarToast('🛒 Nuevo pedido recibido')
+          reproducirSonidoNotificacion()
+        } else if (eventType === 'UPDATE') {
+          const pedidosActualizados = await listarPedidosHoy()
+          setPedidos(pedidosActualizados)
+          mostrarToast('✏️  Pedido actualizado')
         } else if (eventType === 'DELETE') {
           setPedidos(prev => prev.filter(p => p.id !== viejo.id))
           mostrarToast('🗑️  Pedido eliminado')
@@ -163,18 +216,53 @@ export default function App() {
 
   if (!supabaseConfigurado) return <PantallaConfiguracion />
 
+  if (cargando) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center animate-pulse">
+        <div className="w-16 h-16 bg-gray-200 rounded-2xl mb-4" />
+        <h2 className="text-xl font-bold text-gray-400">Cargando sistema...</h2>
+      </div>
+    )
+  }
+
+  // ── Bloqueo por PIN si no hay sesión ──
+  if (!usuarioActual) {
+    return (
+      <LoginPIN 
+        onLoginExitoso={(usuario) => {
+          guardarSesionLocal(usuario)
+          setUsuarioActual(usuario)
+        }} 
+      />
+    )
+  }
+
+  const handleLogout = () => {
+    guardarSesionLocal(null)
+    setUsuarioActual(null)
+  }
+
   return (
-    <div className="min-h-screen bg-[#faf7f4]">
-      <Header tabActivo={tabActivo} setTabActivo={setTabActivo} conectado={conectado} />
+    <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800 pb-20 md:pb-0">
+      <Header 
+        tabActivo={tabActivo} 
+        setTabActivo={setTabActivo} 
+        conectado={conectado} 
+        usuarioActual={usuarioActual}
+        onLogout={handleLogout}
+      />
 
-      <main className="pb-20 md:pb-6">
-
+      <main className="flex-1 w-full max-w-4xl mx-auto md:p-4">
         {tabActivo === 'dashboard' && (
-          <Dashboard
-            pedidos={pedidos}
-            produccion={produccion}
-            gastos={gastos}
+          <Dashboard 
+            pedidos={pedidos} 
+            produccion={produccion} 
+            gastos={gastos} 
             retiros={retiros}
+            onPedidosChange={setPedidos}
+            onGastosChange={setGastos}
+            onRetirosChange={setRetiros}
+            usuarioActual={usuarioActual}
             cargando={cargando}
             onRefresh={() => { cargarPedidos(); cargarProduccion(); cargarGastos(); cargarRetiros() }}
             costos={costos}
