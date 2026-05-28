@@ -33,14 +33,23 @@ function Toggle({ value, onChange, labelOn, labelOff }) {
 }
 
 // ─── Tarjeta de producto (Grid) ───────────────────────────────────────────────
-function TarjetaProducto({ producto, cantidad, onChange }) {
+function TarjetaProducto({ producto, cantidad, onChange, colorTheme }) {
   const inc = () => onChange(cantidad + 1)
   const dec = () => onChange(Math.max(0, cantidad - 1))
   const subtotal = cantidad * producto.precio_venta
 
+  // Mapeo de colores según el tema asignado
+  const themes = {
+    oferta:   { borderOn: 'border-rose-400', bgOn: 'bg-rose-50', textOn: 'text-rose-600', btnBg: 'bg-rose-100', btnHover: 'hover:bg-rose-200' },
+    bebida:   { borderOn: 'border-blue-400', bgOn: 'bg-blue-50', textOn: 'text-blue-600', btnBg: 'bg-blue-100', btnHover: 'hover:bg-blue-200' },
+    sandwich: { borderOn: 'border-emerald-400', bgOn: 'bg-emerald-50', textOn: 'text-emerald-600', btnBg: 'bg-emerald-100', btnHover: 'hover:bg-emerald-200' },
+    basico:   { borderOn: 'border-orange-400', bgOn: 'bg-orange-50', textOn: 'text-orange-600', btnBg: 'bg-orange-100', btnHover: 'hover:bg-orange-200' },
+  }
+  const theme = themes[colorTheme] || themes.basico
+
   return (
     <div className={`flex flex-col justify-between p-3 rounded-xl border-2 transition-all ${
-      cantidad > 0 ? 'border-orange-400 bg-orange-50/50' : 'border-gray-100 bg-white shadow-sm'
+      cantidad > 0 ? `${theme.borderOn} ${theme.bgOn}` : 'border-gray-100 bg-white shadow-sm'
     }`}>
       
       {/* Header: Nombre y Precio */}
@@ -76,14 +85,14 @@ function TarjetaProducto({ producto, cantidad, onChange }) {
             <Minus size={14} strokeWidth={2.5} />
           </button>
           
-          <span className={`w-6 text-center font-bold text-sm ${cantidad > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+          <span className={`w-6 text-center font-bold text-sm ${cantidad > 0 ? theme.textOn : 'text-gray-400'}`}>
             {cantidad}
           </span>
           
           <button
             type="button"
             onClick={inc}
-            className="w-8 h-8 rounded-md bg-orange-100 text-orange-600 flex items-center justify-center hover:bg-orange-200 active:scale-95 transition-all"
+            className={`w-8 h-8 rounded-md flex items-center justify-center transition-all active:scale-95 ${theme.btnBg} ${theme.textOn} ${theme.btnHover}`}
           >
             <Plus size={14} strokeWidth={2.5} />
           </button>
@@ -236,15 +245,45 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos }) {
               Sin productos — ejecuta el SQL de productos.
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {productos.map(p => (
-                <TarjetaProducto
-                  key={p.id}
-                  producto={p}
-                  cantidad={cantidades[p.id] || 0}
-                  onChange={v => setCantidad(p.id, v)}
-                />
-              ))}
+            <div className="space-y-6">
+              {/* Categorización automática en frontend */}
+              {(() => {
+                const ofertas = productos.filter(p => p.nombre.toLowerCase().includes('oferta'))
+                const bebidas = productos.filter(p => p.nombre.toLowerCase().match(/té|cafe|café|consom/))
+                const sandwiches = productos.filter(p => p.nombre.toLowerCase().match(/ave|aliado|mantequilla|membrillo|churrasco/))
+                const basicos = productos.filter(p => !ofertas.includes(p) && !bebidas.includes(p) && !sandwiches.includes(p))
+
+                const Seccion = ({ titulo, items, colorTheme }) => {
+                  if (items.length === 0) return null
+                  return (
+                    <div>
+                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 pl-1">
+                        {titulo}
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {items.map(p => (
+                          <TarjetaProducto
+                            key={p.id}
+                            producto={p}
+                            cantidad={cantidades[p.id] || 0}
+                            onChange={v => setCantidad(p.id, v)}
+                            colorTheme={colorTheme}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                }
+
+                return (
+                  <>
+                    <Seccion titulo="🍞 Pan y Sopaipillas" items={basicos} colorTheme="basico" />
+                    <Seccion titulo="🥪 Sándwiches" items={sandwiches} colorTheme="sandwich" />
+                    <Seccion titulo="☕ Bebidas y Sopas" items={bebidas} colorTheme="bebida" />
+                    <Seccion titulo="🔥 Ofertas" items={ofertas} colorTheme="oferta" />
+                  </>
+                )
+              })()}
             </div>
           )}
         </div>
