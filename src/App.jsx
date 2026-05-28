@@ -130,9 +130,9 @@ export default function App() {
     setTimeout(() => setToast({ visible: false, mensaje: '' }), 3000)
   }, [])
 
-  const cargarPedidos = useCallback(async () => {
+  const cargarPedidos = useCallback(async (silencioso = false) => {
     if (!supabaseConfigurado) return
-    setCargando(true)
+    if (!silencioso) setCargando(true)
     try {
       const data = await listarPedidosHoy()
       setPedidos(data)
@@ -141,7 +141,7 @@ export default function App() {
       console.error('Error al cargar pedidos:', err)
       setConectado(false)
     } finally {
-      setCargando(false)
+      if (!silencioso) setCargando(false)
     }
   }, [supabaseConfigurado])
 
@@ -197,30 +197,42 @@ export default function App() {
     cargarRetiros()
   }, [supabaseConfigurado, cargarPedidos, cargarCostos, cargarProduccion, cargarGastos, cargarRetiros])
 
-  // ── Pull to refresh nativo (Soft Refresh) ──
+  // ── Auto-Refresh al volver a la app (Background -> Foreground) ──
   useEffect(() => {
-    let startY = 0;
-    const handleTouchStart = (e) => {
-      if (window.scrollY === 0) startY = e.touches[0].clientY;
-    };
-    const handleTouchMove = (e) => {
-      const y = e.touches[0].clientY;
-      if (window.scrollY === 0 && y > startY + 130) {
-        cargarPedidos();
-        cargarProduccion();
-        cargarGastos();
-        cargarRetiros();
-        mostrarToast('🔄 Actualizando...');
-        startY = y + 1000; // Evita disparos múltiples
-      }
-    };
-    window.addEventListener('touchstart', handleTouchStart, { passive: true });
-    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    const refrescarSilencioso = () => {
+      cargarPedidos(true)
+      cargarProduccion()
+      cargarGastos()
+      cargarRetiros()
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refrescarSilencioso()
+    }
+
+    // pageshow cubre el caso PWA en iOS cuando vuelves desde otra app
+    const handlePageShow = (e) => {
+      if (e.persisted || document.visibilityState === 'visible') refrescarSilencioso()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pageshow', handlePageShow)
+    window.addEventListener('focus', handleVisibilityChange)
+
     return () => {
-      window.removeEventListener('touchstart', handleTouchStart);
-      window.removeEventListener('touchmove', handleTouchMove);
-    };
-  }, [cargarPedidos, cargarProduccion, cargarGastos, cargarRetiros, mostrarToast])
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pageshow', handlePageShow)
+      window.removeEventListener('focus', handleVisibilityChange)
+    }
+  }, [cargarPedidos, cargarProduccion, cargarGastos, cargarRetiros])
+
+  const forzarRecarga = () => {
+    mostrarToast('🔄 Actualizando...')
+    cargarPedidos()
+    cargarProduccion()
+    cargarGastos()
+    cargarRetiros()
+  }
 
   // ── Suscripción real-time ──
   useEffect(() => {
@@ -319,6 +331,7 @@ export default function App() {
         {tabActivo === 'pedidos' && (
           <ListaPedidos
             pedidos={pedidos}
+            onActualizar={forzarRecarga}
             cargando={cargando}
             onPedidosActualizar={setPedidos}
             usuarioActual={usuarioActual}

@@ -265,7 +265,7 @@ const FILTROS = [
   { value: 'anulado',     label: 'Anulados'     },
 ]
 
-export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, usuarioActual }) {
+export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, usuarioActual, onActualizar }) {
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [pedidoEditar, setPedidoEditar] = useState(null)
@@ -334,12 +334,23 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
   return (
     <div className="p-4 safe-bottom max-w-4xl mx-auto">
 
-      {/* ── Título ── */}
-      <div className="mb-4">
-        <h2 className="text-xl font-bold text-gray-800">Pedidos de Hoy</h2>
-        <p className="text-sm text-gray-500">
-          {(pedidos || []).filter(p => p.estado !== 'anulado').length} pedido(s) válido(s) hoy
-        </p>
+      {/* ── Título y Botón Actualizar ── */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Pedidos de Hoy</h2>
+          <p className="text-sm text-gray-500">
+            {(pedidos || []).filter(p => p.estado !== 'anulado').length} pedido(s) válido(s) hoy
+          </p>
+        </div>
+        {onActualizar && (
+          <button
+            onClick={onActualizar}
+            className="flex items-center gap-1.5 bg-orange-100 text-orange-600 hover:bg-orange-200 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+          >
+            <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} />
+            Actualizar
+          </button>
+        )}
       </div>
 
       {/* ── Buscador ── */}
