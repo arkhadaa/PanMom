@@ -94,3 +94,25 @@ export function formatearCostoInsumo(insumo) {
   if (insumo.unidad === 'ml') return `${formatearPesos(Math.round(cBase * 1000))}/litro`
   return `${formatearPesos(Math.round(cBase))}/unidad`
 }
+
+// ──────────────────────────────────────────
+// FECHAS Y DÍA DE NEGOCIO
+// ──────────────────────────────────────────
+
+/** 
+ * Retorna el rango de fechas para el "día de negocio".
+ * Un día empieza a las 04:00 AM y termina a las 03:59 AM del día siguiente.
+ * Evita que el sistema resetee a cero a medianoche si aún están trabajando.
+ */
+export function obtenerLimitesDiaNegocio() {
+  const ahora = new Date()
+  // Si estamos antes de las 4 AM, consideramos que seguimos en el día "ayer"
+  if (ahora.getHours() < 4) {
+    ahora.setDate(ahora.getDate() - 1)
+  }
+  
+  const inicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 4, 0, 0)
+  const fin = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() + 1, 3, 59, 59)
+  
+  return { inicio, fin }
+}

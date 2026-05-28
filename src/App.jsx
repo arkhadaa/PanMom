@@ -13,6 +13,8 @@ import Insumos from './components/Insumos'
 import Recetas from './components/Recetas'
 import Produccion from './components/Produccion'
 import LoginPIN from './components/LoginPIN'
+import Deudas from './components/Deudas'
+import HistorialCierres from './components/HistorialCierres'
 import {
   listarPedidosHoy,
   listarProduccionHoy,
@@ -286,6 +288,7 @@ export default function App() {
             pedidos={pedidos}
             cargando={cargando}
             onPedidosActualizar={setPedidos}
+            usuarioActual={usuarioActual}
           />
         )}
 
@@ -296,7 +299,7 @@ export default function App() {
           />
         )}
 
-        {tabActivo === 'produccion' && (
+        {tabActivo === 'produccion' && usuarioActual?.rol === 'admin' && (
           <Produccion
             onProduccionRegistrada={() => {
               cargarProduccion()
@@ -305,7 +308,15 @@ export default function App() {
           />
         )}
 
-        {tabActivo === 'costos' && (
+        {tabActivo === 'deudas' && (
+          <Deudas />
+        )}
+
+        {tabActivo === 'historial' && usuarioActual?.rol === 'admin' && (
+          <HistorialCierres />
+        )}
+
+        {tabActivo === 'costos' && usuarioActual?.rol === 'admin' && (
           <div className="p-4 pb-0 max-w-lg mx-auto">
             <div className="flex gap-2 mb-4">
               {[

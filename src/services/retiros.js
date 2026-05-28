@@ -5,14 +5,16 @@
 // =============================================
 
 import { supabase } from './supabase'
+import { obtenerLimitesDiaNegocio } from './helpers'
 
 /** Lista los retiros del día actual. */
 export async function listarRetirosHoy() {
-  const diaHoy = new Date().toISOString().slice(0, 10)
+  const { inicio, fin } = obtenerLimitesDiaNegocio()
   const { data, error } = await supabase
     .from('retiros')
     .select('*')
-    .eq('dia', diaHoy)
+    .gte('fecha', inicio.toISOString())
+    .lte('fecha', fin.toISOString())
     .order('fecha', { ascending: false })
   if (error) throw error
   return data || []
@@ -43,7 +45,7 @@ export async function eliminarRetiro(id) {
  * Caja = Cobrado − Gastos − Retiros
  */
 export function calcularCajaHoy(pedidos, gastos, retiros) {
-  const cobrado      = (pedidos  || []).filter(p => p.pagado).reduce((s, p) => s + (p.monto_pesos || 0), 0)
+  const cobrado      = (pedidos  || []).filter(p => p.pagado && p.estado !== 'anulado').reduce((s, p) => s + (p.monto_pesos || 0), 0)
   const totalGastos  = (gastos   || []).reduce((s, g) => s + (g.monto || 0), 0)
   const totalRetiros = (retiros  || []).reduce((s, r) => s + (r.monto || 0), 0)
   const caja         = cobrado - totalGastos - totalRetiros

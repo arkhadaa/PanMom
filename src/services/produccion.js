@@ -6,6 +6,7 @@
 
 import { supabase } from './supabase'
 import { calcularCostoReceta } from './recetas'
+import { obtenerLimitesDiaNegocio } from './helpers'
 
 export async function registrarProduccion({ receta_id, cargas, notas }) {
   const { data, error } = await supabase
@@ -22,7 +23,7 @@ export async function registrarProduccion({ receta_id, cargas, notas }) {
 }
 
 export async function listarProduccionHoy() {
-  const diaHoy = new Date().toISOString().slice(0, 10)
+  const { inicio, fin } = obtenerLimitesDiaNegocio()
   const { data, error } = await supabase
     .from('produccion')
     .select(`
@@ -35,7 +36,8 @@ export async function listarProduccionHoy() {
         )
       )
     `)
-    .eq('dia', diaHoy)
+    .gte('fecha', inicio.toISOString())
+    .lte('fecha', fin.toISOString())
     .order('fecha', { ascending: false })
   if (error) throw error
   return data || []

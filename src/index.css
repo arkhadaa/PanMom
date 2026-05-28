@@ -78,6 +78,7 @@
    COMPONENTES PERSONALIZADOS
    ============================================= */
 
+@layer components {
 /* Card base */
 .card {
   background: white;
@@ -578,4 +579,5 @@
   flex: 1;
   height: 1px;
   background: var(--color-gray-200);
+}
 }

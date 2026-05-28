@@ -4,6 +4,7 @@
 // =============================================
 
 import { supabase } from './supabase'
+import { obtenerLimitesDiaNegocio } from './helpers'
 
 /** Registra un gasto del día. */
 export async function registrarGasto({ descripcion, monto }) {
@@ -22,9 +23,7 @@ export async function registrarGasto({ descripcion, monto }) {
 
 /** Lista los gastos del día actual. */
 export async function listarGastosHoy() {
-  const hoy    = new Date()
-  const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 0, 0, 0)
-  const fin    = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 23, 59, 59)
+  const { inicio, fin } = obtenerLimitesDiaNegocio()
 
   const { data, error } = await supabase
     .from('gastos')

@@ -25,7 +25,7 @@ import {
 import {
   actualizarEstado,
   actualizarPago,
-  eliminarPedido,
+  anularPedido,
   formatearPesos,
   claseBadgeEstado,
   LABELS_ESTADO,
@@ -33,26 +33,29 @@ import {
 import EditarPedido from './EditarPedido'
 
 // ─── Confirmación de eliminación ─────────────────────────────────────────────
-function ConfirmarEliminar({ pedido, onConfirmar, onCancelar }) {
+function ConfirmarEliminar({ pedido, onConfirmar, onCancelar, esAdmin }) {
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onCancelar()}>
       <div className="modal-content max-w-sm">
         <div className="text-center py-2">
-          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <AlertTriangle size={28} className="text-red-500" />
-          </div>
-          <h3 className="font-bold text-gray-800 text-lg mb-1">¿Eliminar pedido?</h3>
+          <h3 className="font-bold text-gray-800 text-lg mb-1">
+            {esAdmin ? '¿Anular pedido?' : '¿Eliminar pedido?'}
+          </h3>
           <p className="text-sm text-gray-500 mb-1">
-            ¿Seguro que deseas eliminar el pedido de
+            {esAdmin ? '¿Seguro que deseas anular el pedido de' : '¿Seguro que deseas eliminar el pedido de'}
           </p>
           <p className="font-bold text-gray-700 mb-4">"{pedido.clientes?.nombre}"?</p>
-          <p className="text-xs text-red-500 mb-6">Esta acción no se puede deshacer.</p>
+          <p className="text-xs text-red-500 mb-6">
+            {esAdmin 
+              ? 'El pedido no sumará a la caja, pero quedará registrado como anulado.'
+              : 'Esta acción no se puede deshacer.'}
+          </p>
           <div className="flex gap-3">
             <button onClick={onCancelar} className="btn-secondary flex-1">
               Cancelar
             </button>
-            <button onClick={() => onConfirmar(pedido.id)} className="flex-1 btn-danger !text-sm !py-2.5 !px-4">
-              Sí, eliminar
+            <button onClick={() => onConfirmar(pedido.id)} className="flex-1 btn-danger !text-sm !py-2.5 !px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors shadow-sm">
+              {esAdmin ? 'Sí, anular' : 'Sí, eliminar'}
             </button>
           </div>
         </div>
@@ -62,7 +65,7 @@ function ConfirmarEliminar({ pedido, onConfirmar, onCancelar }) {
 }
 
 // ─── Tarjeta individual de pedido ─────────────────────────────────────────────
-function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin }) {
+function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, usuarioActual }) {
   const [expandido, setExpandido] = useState(false)
   const [cargandoAccion, setCargandoAccion] = useState(null) // 'produciendo' | 'entregado' | 'pago'
 
@@ -88,7 +91,7 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin }) 
     if (!sigEstado || cargandoAccion) return
     setCargandoAccion('estado')
     try {
-      const updated = await actualizarEstado(pedido.id, sigEstado)
+      const updated = await actualizarEstado(pedido.id, sigEstado, usuarioActual?.rol || 'vendedor')
       onActualizar(updated)
     } catch (err) {
       console.error(err)
@@ -101,7 +104,7 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin }) 
     if (cargandoAccion) return
     setCargandoAccion('pago')
     try {
-      const updated = await actualizarPago(pedido.id, !pedido.pagado)
+      const updated = await actualizarPago(pedido.id, !pedido.pagado, usuarioActual?.rol || 'vendedor')
       onActualizar(updated)
     } catch (err) {
       console.error(err)
@@ -112,6 +115,7 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin }) 
 
   return (
     <div className={`card animate-slide-in border-l-4 ${
+      pedido.estado === 'anulado'   ? 'border-l-red-500 opacity-60 bg-red-50/30' :
       pedido.estado === 'entregado' ? 'border-l-gray-300 opacity-75' :
       pedido.estado === 'listo'     ? 'border-l-green-400' :
       pedido.estado === 'produciendo' ? 'border-l-blue-400' :
@@ -184,8 +188,8 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin }) 
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={handleTogglePago}
-          disabled={!!cargandoAccion || !esAdmin}
-          className={`badge ${pedido.pagado ? 'badge-pagado' : 'badge-debe'} ${esAdmin ? 'cursor-pointer hover:opacity-80' : 'opacity-70'} transition-opacity`}
+          disabled={!!cargandoAccion}
+          className={`badge ${pedido.pagado ? 'badge-pagado' : 'badge-debe'} cursor-pointer hover:opacity-80 transition-opacity`}
         >
           {cargandoAccion === 'pago' ? (
             <Loader2 size={11} className="animate-spin" />
@@ -225,24 +229,24 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin }) 
           Editar
         </button>
 
-        {/* Eliminar */}
-        {esAdmin && (
-          <button
-            onClick={() => onEliminar(pedido)}
-            className="btn-danger"
-            disabled={!!cargandoAccion}
-          >
-            <Trash2 size={13} />
-            Eliminar
-          </button>
-        )}
+        {/* Anular/Eliminar */}
+        <button
+          onClick={() => onEliminar(pedido)}
+          className="btn-danger bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 text-xs transition-colors"
+          disabled={!!cargandoAccion}
+        >
+          <Trash2 size={13} />
+          {esAdmin ? 'Anular' : 'Eliminar'}
+        </button>
       </div>
 
       {/* ── Sección expandida: notas ── */}
       {expandido && pedido.notas && (
         <div className="mt-3 pt-3 border-t border-gray-100">
           <p className="text-xs font-semibold text-gray-500 mb-1">Notas:</p>
-          <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">{pedido.notas}</p>
+          <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
+            {esAdmin ? pedido.notas : pedido.notas.replace(/⚠️.*?(\n|$)/g, '').trim()}
+          </p>
         </div>
       )}
     </div>
@@ -256,6 +260,7 @@ const FILTROS = [
   { value: 'produciendo', label: 'Produciendo'  },
   { value: 'listo',       label: 'Listos'       },
   { value: 'entregado',   label: 'Entregados'   },
+  { value: 'anulado',     label: 'Anulados'     },
 ]
 
 export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, usuarioActual }) {
@@ -265,12 +270,21 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
   const [pedidoEliminar, setPedidoEliminar] = useState(null)
   
   const esAdmin = usuarioActual?.rol === 'admin'
+  const filtrosActivos = esAdmin ? FILTROS : FILTROS.filter(f => f.value !== 'anulado')
 
   // ── Filtrar y buscar pedidos ──
   const pedidosFiltrados = useMemo(() => {
     let lista = pedidos || []
 
-    if (filtroEstado !== 'todos') {
+    // Si no es admin, ocultar los anulados globalmente
+    if (!esAdmin) {
+      lista = lista.filter(p => p.estado !== 'anulado')
+    }
+
+    if (filtroEstado === 'todos') {
+      // En la pestaña "Todos", ocultamos la basura (anulados) para no ensuciar la vista
+      lista = lista.filter(p => p.estado !== 'anulado')
+    } else {
       lista = lista.filter(p => p.estado === filtroEstado)
     }
 
@@ -297,12 +311,11 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
     onPedidosActualizar(nuevaLista)
   }
 
-  // ── Confirmar eliminación ──
+  // ── Confirmar anulación ──
   const handleConfirmarEliminar = async (pedidoId) => {
     try {
-      await eliminarPedido(pedidoId)
-      const nuevaLista = (pedidos || []).filter(p => p.id !== pedidoId)
-      onPedidosActualizar(nuevaLista)
+      const updated = await anularPedido(pedidoId, usuarioActual?.rol || 'vendedor')
+      handleActualizar(updated)
     } catch (err) {
       console.error('Error al eliminar:', err)
     } finally {
@@ -323,7 +336,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
       <div className="mb-4">
         <h2 className="text-xl font-bold text-gray-800">Pedidos de Hoy</h2>
         <p className="text-sm text-gray-500">
-          {pedidos?.length || 0} pedido{(pedidos?.length || 0) !== 1 ? 's' : ''} registrado{(pedidos?.length || 0) !== 1 ? 's' : ''}
+          {(pedidos || []).filter(p => p.estado !== 'anulado').length} pedido(s) válido(s) hoy
         </p>
       </div>
 
@@ -341,7 +354,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
 
       {/* ── Filtros de estado ── */}
       <div className="flex gap-2 overflow-x-auto pb-1 mb-4 scrollbar-none">
-        {FILTROS.map(f => (
+        {filtrosActivos.map(f => (
           <button
             key={f.value}
             onClick={() => setFiltroEstado(f.value)}
@@ -404,6 +417,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
               onEditar={setPedidoEditar}
               onEliminar={setPedidoEliminar}
               esAdmin={esAdmin}
+              usuarioActual={usuarioActual}
             />
           ))}
         </div>
@@ -424,6 +438,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
           pedido={pedidoEliminar}
           onConfirmar={handleConfirmarEliminar}
           onCancelar={() => setPedidoEliminar(null)}
+          esAdmin={esAdmin}
         />
       )}
     </div>

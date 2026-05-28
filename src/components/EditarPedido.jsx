@@ -177,14 +177,44 @@ export default function EditarPedido({ pedido, onCerrar, onPedidoEditado }) {
               {productos.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-3">Cargando...</p>
               ) : (
-                productos.map(p => (
-                  <FilaProducto
-                    key={p.id}
-                    producto={p}
-                    cantidad={cantidades[p.id] || 0}
-                    onChange={v => setCantidad(p.id, v)}
-                  />
-                ))
+                <div className="space-y-4">
+                  {(() => {
+                    const ofertas = productos.filter(p => p.nombre.toLowerCase().includes('oferta'))
+                    const bebidas = productos.filter(p => p.nombre.toLowerCase().match(/té|cafe|café|consom/))
+                    const sandwiches = productos.filter(p => p.nombre.toLowerCase().match(/ave|aliado|mantequilla|membrillo|churrasco/))
+                    const basicos = productos.filter(p => !ofertas.includes(p) && !bebidas.includes(p) && !sandwiches.includes(p))
+
+                    const Seccion = ({ titulo, items }) => {
+                      if (items.length === 0) return null
+                      return (
+                        <div>
+                          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 pl-1">
+                            {titulo}
+                          </h3>
+                          <div className="space-y-1.5">
+                            {items.map(p => (
+                              <FilaProducto
+                                key={p.id}
+                                producto={p}
+                                cantidad={cantidades[p.id] || 0}
+                                onChange={v => setCantidad(p.id, v)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <>
+                        <Seccion titulo="🍞 Pan y Sopaipillas" items={basicos} />
+                        <Seccion titulo="🥪 Sándwiches" items={sandwiches} />
+                        <Seccion titulo="☕ Bebidas y Sopas" items={bebidas} />
+                        <Seccion titulo="🔥 Ofertas" items={ofertas} />
+                      </>
+                    )
+                  })()}
+                </div>
               )}
             </div>
           </div>

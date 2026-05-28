@@ -4,13 +4,14 @@
 // ventas y estado de pedidos.
 // =============================================
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import {
-  Wheat, DollarSign, AlertCircle, Clock, ChefHat,
+  DollarSign, AlertCircle, Clock, ChefHat,
   PackageCheck, TrendingUp, TrendingDown, RefreshCw,
-  Percent, Flame, Loader2, Trash2, ArrowDownCircle,
+  Percent, Loader2, Trash2, ArrowDownCircle,
+  Star, Receipt, ShoppingBag
 } from 'lucide-react'
-import { formatearPesos, calcularResumenProduccion, calcularCajaHoy } from '../services/supabaseClient'
+import { formatearPesos, calcularResumenProduccion, calcularCajaHoy, registrarCierreCaja } from '../services/supabaseClient'
 
 // ─── Tarjeta de estadística ───────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, sublabel, bgClass, textClass, iconBg }) {
@@ -99,45 +100,55 @@ export default function Dashboard({
   pedidos, produccion, gastos = [], retiros = [],
   cargando, onRefresh, costos,
   onIrACostos, onIrAProduccion, onRegistrarRetiro, onEliminarRetiro,
+  usuarioActual,
 }) {
+  const [cerrandoCaja, setCerrandoCaja] = useState(false)
+  const [cajaCerrada, setCajaCerrada] = useState(false)
+
   // ── Totales de pedidos ──
   const stats = useMemo(() => {
-    const hoy = pedidos || []
+    // Excluir anulados para que no sumen a los totales ni a la producción
+    const hoy = (pedidos || []).filter(p => p.estado !== 'anulado')
 
-    // Contar panes y sopaipillas desde pedido_items (fallback a columnas legacy)
-    const totalPanes = hoy.reduce((s, p) => {
-      if (p.pedido_items?.length > 0) {
-        return s + p.pedido_items
-          .filter(i => i.productos?.nombre?.toLowerCase().includes('pan'))
-          .reduce((ss, i) => ss + i.cantidad, 0)
-      }
-      return s + (p.cantidad_panes || 0)
-    }, 0)
-
-    const totalSopaipillas = hoy.reduce((s, p) => {
-      if (p.pedido_items?.length > 0) {
-        return s + p.pedido_items
-          .filter(i => i.productos?.nombre?.toLowerCase().includes('sopaipilla'))
-          .reduce((ss, i) => ss + i.cantidad, 0)
-      }
-      return s + (p.cantidad_sopaipillas || 0)
-    }, 0)
-
+    // ── Nuevo cálculo de KPIs ──
     const dineroEsperado  = hoy.reduce((s, p) => s + (p.monto_pesos || 0), 0)
     const dineroPendiente = hoy.filter(p => !p.pagado).reduce((s, p) => s + (p.monto_pesos || 0), 0)
     const dineroRecibido  = hoy.filter(p =>  p.pagado).reduce((s, p) => s + (p.monto_pesos || 0), 0)
+    
     const cantPendientes  = hoy.filter(p => p.estado === 'pendiente').length
     const cantProduciendo = hoy.filter(p => p.estado === 'produciendo').length
     const cantListos      = hoy.filter(p => p.estado === 'listo').length
     const cantEntregados  = hoy.filter(p => p.estado === 'entregado').length
-    const porcentajePago  = hoy.length > 0
-      ? Math.round((hoy.filter(p => p.pagado).length / hoy.length) * 100)
-      : 0
+    
+    const totalPedidos = hoy.length
+    const porcentajePago = totalPedidos > 0 ? Math.round((dineroRecibido / dineroEsperado) * 100) : 0
+    const ticketPromedio = totalPedidos > 0 ? Math.round(dineroEsperado / totalPedidos) : 0
+
+    // Producto más vendido del día
+    const conteoProductos = {}
+    hoy.forEach(p => {
+      if (p.pedido_items) {
+        p.pedido_items.forEach(item => {
+          const nombre = item.productos?.nombre || 'Desconocido'
+          conteoProductos[nombre] = (conteoProductos[nombre] || 0) + item.cantidad
+        })
+      }
+    })
+    
+    let productoEstrella = 'Ninguno'
+    let maxCant = 0
+    Object.entries(conteoProductos).forEach(([nombre, cant]) => {
+      if (cant > maxCant) {
+        maxCant = cant
+        productoEstrella = nombre
+      }
+    })
 
     return {
-      totalPanes, totalSopaipillas, dineroEsperado, dineroPendiente, dineroRecibido,
+      dineroEsperado, dineroPendiente, dineroRecibido,
       cantPendientes, cantProduciendo, cantListos, cantEntregados,
-      totalPedidos: hoy.length, porcentajePago,
+      totalPedidos, porcentajePago, ticketPromedio,
+      productoEstrella, maxCant
     }
   }, [pedidos])
 
@@ -154,10 +165,49 @@ export default function Dashboard({
   )
   const hayProduccion = resumenProd.totalCargas > 0
 
-  // Fecha
+  // Fecha y Hora
   const fechaHoy = new Intl.DateTimeFormat('es-CL', {
     weekday: 'long', day: 'numeric', month: 'long',
   }).format(new Date())
+
+  const [horaLocal, setHoraLocal] = useState('')
+  const [saludo, setSaludo] = useState('¡Buenos días! 🌅')
+
+  useEffect(() => {
+    const actualizarReloj = () => {
+      const ahora = new Date()
+      setHoraLocal(ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }))
+      
+      const hora = ahora.getHours()
+      if (hora >= 5 && hora < 12) setSaludo('¡Buenos días! 🌅')
+      else if (hora >= 12 && hora < 20) setSaludo('¡Buenas tardes! ☀️')
+      else setSaludo('¡Buenas noches! 🌙')
+    }
+    actualizarReloj()
+    const timer = setInterval(actualizarReloj, 10000) // actualizar cada 10 seg
+    return () => clearInterval(timer)
+  }, [])
+
+  const handleCerrarCaja = async () => {
+    if (!window.confirm('¿Estás seguro de cerrar la caja de hoy? Esto guardará los totales en el historial.')) return
+    
+    setCerrandoCaja(true)
+    try {
+      await registrarCierreCaja({
+        total_ingresos: caja.cobrado,
+        total_gastos: caja.totalGastos,
+        total_retiros: caja.totalRetiros,
+        caja_final: caja.caja,
+        total_pedidos: stats.totalPedidos
+      })
+      setCajaCerrada(true)
+      setTimeout(() => setCajaCerrada(false), 3000)
+    } catch (e) {
+      alert('Error cerrando caja')
+    } finally {
+      setCerrandoCaja(false)
+    }
+  }
 
   return (
     <div className="p-4 safe-bottom max-w-4xl mx-auto">
@@ -165,8 +215,10 @@ export default function Dashboard({
       {/* ── Saludo ── */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <p className="text-xs font-medium text-gray-400 capitalize">{fechaHoy}</p>
-          <h2 className="text-xl font-bold text-gray-800">¡Buenos días! 🌅</h2>
+          <p className="text-xs font-medium text-gray-400 capitalize flex items-center gap-1.5">
+            {fechaHoy} <span className="w-1 h-1 bg-gray-300 rounded-full"></span> <span className="font-bold text-gray-500">{horaLocal}</span>
+          </p>
+          <h2 className="text-xl font-bold text-gray-800">{saludo}</h2>
           <p className="text-sm text-gray-500">
             {stats.totalPedidos === 0
               ? 'Sin pedidos todavía hoy'
@@ -186,7 +238,8 @@ export default function Dashboard({
       {/* ══════════════════════════════════════════
           SECCIÓN 1: PRODUCCIÓN DEL DÍA
           ══════════════════════════════════════════ */}
-      <section className="mb-5">
+      {usuarioActual?.rol === 'admin' && (
+        <section className="mb-5">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
             🏭 Producción del día
@@ -283,6 +336,7 @@ export default function Dashboard({
           </>
         )}
       </section>
+      )}
 
       {/* ══════════════════════════════════════════
           SECCIÓN 2: VENTAS DEL DÍA
@@ -293,30 +347,30 @@ export default function Dashboard({
         </h3>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <StatCard
-            icon={Wheat}
-            label="Panes pedidos"
-            value={stats.totalPanes}
-            sublabel="en pedidos de hoy"
-            bgClass="bg-gradient-to-br from-amber-400 to-orange-500"
+            icon={Receipt}
+            label="Gasto Promedio"
+            value={formatearPesos(stats.ticketPromedio)}
+            sublabel="Gasto por cliente"
+            bgClass="bg-gradient-to-br from-blue-500 to-indigo-600"
             textClass="text-white"
             iconBg="bg-white/20"
           />
           <StatCard
-            icon={Flame}
-            label="Sopaipillas"
-            value={stats.totalSopaipillas}
-            sublabel="en pedidos de hoy"
-            bgClass="bg-gradient-to-br from-orange-400 to-red-500"
+            icon={Star}
+            label="Más vendido"
+            value={stats.productoEstrella}
+            sublabel={`${stats.maxCant} unidades vendidas`}
+            bgClass="bg-gradient-to-br from-amber-400 to-orange-500"
             textClass="text-white"
             iconBg="bg-white/20"
           />
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <StatCard
-            icon={TrendingUp}
-            label="Esperado hoy"
-            value={formatearPesos(stats.dineroEsperado)}
-            sublabel="total en pedidos"
+            icon={ShoppingBag}
+            label="Ventas Hoy"
+            value={stats.totalPedidos}
+            sublabel="Pedidos totales"
             bgClass="bg-gradient-to-br from-teal-500 to-cyan-600"
             textClass="text-white"
             iconBg="bg-white/20"
@@ -374,6 +428,29 @@ export default function Dashboard({
             </span>
           </div>
         </div>
+
+        {/* Botón Cierre de Caja (Solo Admin) */}
+        {usuarioActual?.rol === 'admin' && (
+          <div className="mb-4">
+            <button
+              onClick={handleCerrarCaja}
+              disabled={cerrandoCaja || cajaCerrada}
+              className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm
+                ${cajaCerrada 
+                  ? 'bg-green-100 text-green-700 border border-green-200' 
+                  : 'bg-gray-800 text-white hover:bg-gray-700 active:scale-95'
+                }`}
+            >
+              {cerrandoCaja ? (
+                <><Loader2 size={18} className="animate-spin" /> Guardando historial...</>
+              ) : cajaCerrada ? (
+                <>✅ Caja Cerrada Correctamente</>
+              ) : (
+                <>🔒 Guardar Cierre de Caja en Historial</>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Formulario retiro */}
         {onRegistrarRetiro && (
