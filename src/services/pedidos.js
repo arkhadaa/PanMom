@@ -31,6 +31,39 @@ export async function obtenerOCrearCliente(nombre, telefono = null) {
   return nuevo
 }
 
+/** Lista todos los clientes ordenados por nombre alfabéticamente. */
+export async function listarTodosClientes() {
+  const { data, error } = await supabase
+    .from('clientes')
+    .select('id, nombre')
+    .order('nombre')
+
+  if (error) return []
+  return data || []
+}
+
+/** Extrae los clientes únicos de los últimos pedidos (más frecuentes/recientes). */
+export async function listarClientesFrecuentes(limite = 5) {
+  const { data, error } = await supabase
+    .from('pedidos')
+    .select('clientes ( id, nombre )')
+    .order('fecha_pedido', { ascending: false })
+    .limit(50)
+
+  if (error) return []
+
+  const unicos = []
+  const ids = new Set()
+  for (const row of (data || [])) {
+    if (row.clientes && !ids.has(row.clientes.id)) {
+      ids.add(row.clientes.id)
+      unicos.push(row.clientes)
+      if (unicos.length >= limite) break
+    }
+  }
+  return unicos
+}
+
 // ──────────────────────────────────────────
 // HISTORIAL
 // ──────────────────────────────────────────

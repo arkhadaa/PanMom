@@ -4,9 +4,12 @@
 // con contador de cantidad por ítem.
 // =============================================
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Plus, Minus, User, ShoppingCart, DollarSign, FileText, CheckCircle, Loader2 } from 'lucide-react'
-import { crearPedido, listarProductos, formatearPesos } from '../services/supabaseClient'
+import { 
+  crearPedido, listarProductos, formatearPesos, 
+  listarTodosClientes, listarClientesFrecuentes 
+} from '../services/supabaseClient'
 
 // ─── Toggle ───────────────────────────────────────────────────────────────────
 function Toggle({ value, onChange, labelOn, labelOff }) {
@@ -89,12 +92,46 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos }) {
   const [error, setError]           = useState(null)
   const [cargandoProd, setCargProd] = useState(true)
 
+  // Estados para autocompletado y clientes frecuentes
+  const [clientesTodos, setClientesTodos] = useState([])
+  const [clientesFrecuentes, setClientesFrecuentes] = useState([])
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
+  
+  // Referencia para ocultar el autocomplete al hacer click fuera
+  const clienteContainerRef = useRef(null)
+
   useEffect(() => {
-    listarProductos()
-      .then(data => setProductos(data))
-      .catch(() => {})
-      .finally(() => setCargProd(false))
+    Promise.all([
+      listarProductos().catch(() => []),
+      listarTodosClientes().catch(() => []),
+      listarClientesFrecuentes(5).catch(() => [])
+    ]).then(([prodData, todosData, frecData]) => {
+      setProductos(prodData)
+      setClientesTodos(todosData)
+      setClientesFrecuentes(frecData)
+      setCargProd(false)
+    })
   }, [])
+
+  // Cerrar sugerencias al hacer click fuera
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (clienteContainerRef.current && !clienteContainerRef.current.contains(event.target)) {
+        setMostrarSugerencias(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  // Filtrado de sugerencias de clientes
+  const clientesSugeridos = useMemo(() => {
+    const search = nombreCliente.trim().toLowerCase()
+    if (!search) return []
+    return clientesTodos
+      .filter(c => c.nombre.toLowerCase().includes(search) && c.nombre.toLowerCase() !== search)
+      .slice(0, 5) // Mostramos hasta 5 sugerencias para no ensuciar la UI
+  }, [nombreCliente, clientesTodos])
 
   const setCantidad = (productoId, valor) =>
     setCantidades(prev => ({ ...prev, [productoId]: Math.max(0, valor) }))
@@ -213,24 +250,74 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos }) {
         )}
 
         {/* ── Cliente ── */}
-        <div className="divider-text">Cliente</div>
-        <div>
-          <label className="input-label">
+        <div className="divider-text mt-4">Cliente</div>
+        <div ref={clienteContainerRef} className="relative">
+          <label className="input-label mb-2">
             <span className="flex items-center gap-1.5">
               <User size={14} className="text-orange-500" />
               Nombre del cliente
             </span>
           </label>
+          
+          {/* Chips de clientes frecuentes */}
+          {clientesFrecuentes.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {clientesFrecuentes.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    setNombre(c.nombre)
+                    setMostrarSugerencias(false)
+                  }}
+                  className={`
+                    px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95
+                    ${nombreCliente === c.nombre
+                      ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-orange-300'
+                    }
+                  `}
+                >
+                  {c.nombre}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Input de texto con autocomplete */}
           <input
             type="text"
             value={nombreCliente}
-            onChange={e => setNombre(e.target.value)}
-            placeholder="Ej: María González"
-            className="input-field"
+            onChange={e => {
+              setNombre(e.target.value)
+              setMostrarSugerencias(true)
+            }}
+            onFocus={() => setMostrarSugerencias(true)}
+            placeholder="Escribe el nombre..."
+            className="input-field w-full"
             autoComplete="off"
             maxLength={100}
             required
           />
+
+          {/* Dropdown de sugerencias */}
+          {mostrarSugerencias && clientesSugeridos.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg overflow-hidden animate-slide-in">
+              {clientesSugeridos.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    setNombre(c.nombre)
+                    setMostrarSugerencias(false)
+                  }}
+                  className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-orange-50 active:bg-orange-100 border-b border-gray-50 last:border-0 transition-colors"
+                >
+                  {c.nombre}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── Pago ── */}
