@@ -32,50 +32,63 @@ function Toggle({ value, onChange, labelOn, labelOff }) {
   )
 }
 
-// ─── Fila de producto ─────────────────────────────────────────────────────────
-function FilaProducto({ producto, cantidad, onChange }) {
+// ─── Tarjeta de producto (Grid) ───────────────────────────────────────────────
+function TarjetaProducto({ producto, cantidad, onChange }) {
   const inc = () => onChange(cantidad + 1)
   const dec = () => onChange(Math.max(0, cantidad - 1))
   const subtotal = cantidad * producto.precio_venta
 
   return (
-    <div className={`flex items-center gap-3 py-3 px-4 rounded-xl border-2 transition-all ${
-      cantidad > 0 ? 'border-orange-300 bg-orange-50' : 'border-gray-100 bg-white'
+    <div className={`flex flex-col justify-between p-3 rounded-xl border-2 transition-all ${
+      cantidad > 0 ? 'border-orange-400 bg-orange-50/50' : 'border-gray-100 bg-white shadow-sm'
     }`}>
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-gray-800 text-sm truncate">{producto.nombre}</p>
-        <p className="text-xs text-gray-400">{formatearPesos(producto.precio_venta)} c/u</p>
+      
+      {/* Header: Nombre y Precio */}
+      <div className="mb-3">
+        <p className="font-bold text-gray-800 text-sm leading-tight line-clamp-2">
+          {producto.nombre}
+        </p>
+        <p className="text-xs text-gray-500 mt-0.5">
+          {formatearPesos(producto.precio_venta)}
+        </p>
       </div>
 
-      {/* Contador */}
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <button
-          type="button"
-          onClick={dec}
-          disabled={cantidad === 0}
-          className="w-9 h-9 rounded-xl border-2 border-gray-200 bg-gray-50 flex items-center justify-center text-gray-500 active:scale-95 transition-all disabled:opacity-30"
-        >
-          <Minus size={14} />
-        </button>
-        <span className={`w-8 text-center font-bold text-lg select-none ${cantidad > 0 ? 'text-orange-600' : 'text-gray-300'}`}>
-          {cantidad}
-        </span>
-        <button
-          type="button"
-          onClick={inc}
-          className="w-9 h-9 rounded-xl border-2 border-orange-200 bg-orange-50 flex items-center justify-center font-bold text-orange-500 active:scale-95 transition-all"
-        >
-          <Plus size={14} />
-        </button>
-      </div>
+      {/* Footer: Contador y Subtotal */}
+      <div className="mt-auto flex flex-col gap-2">
+        {/* Subtotal flotante */}
+        {cantidad > 0 && (
+          <div className="text-right h-4">
+            <span className="text-xs font-bold text-green-600">
+              {formatearPesos(subtotal)}
+            </span>
+          </div>
+        )}
+        {!cantidad && <div className="h-4" />}
 
-      {/* Subtotal */}
-      {cantidad > 0 && (
-        <div className="flex-shrink-0 min-w-[56px] text-right">
-          <p className="text-sm font-bold text-green-600">{formatearPesos(subtotal)}</p>
+        {/* Controles */}
+        <div className="flex items-center justify-between gap-1 w-full bg-white rounded-lg p-1 border border-gray-100 shadow-sm">
+          <button
+            type="button"
+            onClick={dec}
+            disabled={cantidad === 0}
+            className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 active:scale-95 disabled:opacity-30 transition-all"
+          >
+            <Minus size={14} strokeWidth={2.5} />
+          </button>
+          
+          <span className={`w-6 text-center font-bold text-sm ${cantidad > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+            {cantidad}
+          </span>
+          
+          <button
+            type="button"
+            onClick={inc}
+            className="w-8 h-8 rounded-md bg-orange-100 text-orange-600 flex items-center justify-center hover:bg-orange-200 active:scale-95 transition-all"
+          >
+            <Plus size={14} strokeWidth={2.5} />
+          </button>
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -213,9 +226,9 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos }) {
           </div>
 
           {cargandoProd ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="skeleton h-16 w-full rounded-xl" />
+            <div className="grid grid-cols-2 gap-3">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className="skeleton h-28 w-full rounded-xl" />
               ))}
             </div>
           ) : productos.length === 0 ? (
@@ -223,9 +236,9 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos }) {
               Sin productos — ejecuta el SQL de productos.
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {productos.map(p => (
-                <FilaProducto
+                <TarjetaProducto
                   key={p.id}
                   producto={p}
                   cantidad={cantidades[p.id] || 0}
