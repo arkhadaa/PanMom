@@ -21,6 +21,7 @@ import {
   XCircle,
   Loader2,
   AlertTriangle,
+  RefreshCw,
 } from 'lucide-react'
 import {
   actualizarEstado,
