@@ -103,7 +103,7 @@ function TarjetaProducto({ producto, cantidad, onChange, colorTheme }) {
 }
 
 // ─── Formulario principal ─────────────────────────────────────────────────────
-export default function AgregarPedido({ onPedidoCreado, onIrAPedidos }) {
+export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioActual }) {
   const [productos, setProductos]   = useState([])
   const [cantidades, setCantidades] = useState({}) // { producto_id: cantidad }
   const [nombreCliente, setNombre]  = useState('')
@@ -187,6 +187,7 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos }) {
         pagado,
         metodo_pago: pagado ? metodoPago : null,
         notas: notas.trim() || null,
+        usuario: usuarioActual?.nombre || 'sistema',
       })
       setExito(true)
       setNombre('')

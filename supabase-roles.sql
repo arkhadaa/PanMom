@@ -20,5 +20,6 @@ CREATE POLICY "Permitir actualizar usuarios" ON usuarios_pin FOR UPDATE USING (t
 INSERT INTO usuarios_pin (nombre, pin, rol) VALUES
   ('Mamá', '1111', 'admin'),
   ('Papá', '2222', 'admin'),
-  ('Hermano', '3333', 'vendedor')
+  ('Hermano', '3333', 'vendedor'),
+  ('Angel', '9900', 'superadmin')
 ON CONFLICT (pin) DO NOTHING;

@@ -73,7 +73,7 @@ function FilaProducto({ producto, cantidad, onChange }) {
   )
 }
 
-export default function EditarPedido({ pedido, onCerrar, onPedidoEditado }) {
+export default function EditarPedido({ pedido, onCerrar, onPedidoEditado, usuarioActual }) {
   const [productos, setProductos]   = useState([])
   const [cantidades, setCantidades] = useState({})
   const [nombreCliente, setNombre]  = useState(pedido.clientes?.nombre || '')
@@ -132,7 +132,7 @@ export default function EditarPedido({ pedido, onCerrar, onPedidoEditado }) {
         metodo_pago: pagado ? metodoPago : null,
         estado,
         notas: notas.trim() || null,
-      })
+      }, usuarioActual?.nombre || 'sistema')
       onPedidoEditado?.(pedidoActualizado)
       onCerrar()
     } catch (err) {

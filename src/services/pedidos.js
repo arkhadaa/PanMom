@@ -81,7 +81,7 @@ export async function registrarHistorial(pedidoId, accion, usuario = 'sistema') 
 // ──────────────────────────────────────────
 
 /** Crea un pedido con sus líneas de producto. */
-export async function crearPedido({ nombreCliente, items = [], pagado, metodo_pago = 'efectivo', notas }) {
+export async function crearPedido({ nombreCliente, items = [], pagado, metodo_pago = 'efectivo', notas, usuario = 'sistema' }) {
   const cliente    = await obtenerOCrearCliente(nombreCliente)
   const montoPesos = Math.round(items.reduce((s, i) => s + i.cantidad * i.precio_unitario, 0))
 
@@ -115,7 +115,7 @@ export async function crearPedido({ nombreCliente, items = [], pagado, metodo_pa
     if (errItems) console.warn('pedido_items insert:', errItems.message)
   }
 
-  await registrarHistorial(data.id, 'Pedido creado', 'sistema')
+  await registrarHistorial(data.id, 'Pedido creado', usuario)
   return data
 }
 

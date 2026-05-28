@@ -92,7 +92,7 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
     if (!sigEstado || cargandoAccion) return
     setCargandoAccion('estado')
     try {
-      const updated = await actualizarEstado(pedido.id, sigEstado, usuarioActual?.rol || 'vendedor')
+      const updated = await actualizarEstado(pedido.id, sigEstado, usuarioActual?.nombre || 'sistema')
       onActualizar(updated)
     } catch (err) {
       console.error(err)
@@ -105,7 +105,7 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
     if (cargandoAccion) return
     setCargandoAccion('pago')
     try {
-      const updated = await actualizarPago(pedido.id, !pedido.pagado, usuarioActual?.rol || 'vendedor')
+      const updated = await actualizarPago(pedido.id, !pedido.pagado, usuarioActual?.nombre || 'sistema')
       onActualizar(updated)
     } catch (err) {
       console.error(err)
@@ -272,7 +272,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
   const [pedidoEditar, setPedidoEditar] = useState(null)
   const [pedidoEliminar, setPedidoEliminar] = useState(null)
   
-  const esAdmin = usuarioActual?.rol === 'admin'
+  const esAdmin = usuarioActual?.rol === 'superadmin'
   const filtrosActivos = esAdmin ? FILTROS : FILTROS.filter(f => f.value !== 'anulado')
 
   // ── Filtrar y buscar pedidos ──
@@ -317,7 +317,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
   // ── Confirmar anulación ──
   const handleConfirmarEliminar = async (pedidoId) => {
     try {
-      const updated = await anularPedido(pedidoId, usuarioActual?.rol || 'vendedor')
+      const updated = await anularPedido(pedidoId, usuarioActual?.nombre || 'sistema')
       handleActualizar(updated)
     } catch (err) {
       console.error('Error al eliminar:', err)
@@ -443,6 +443,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
           pedido={pedidoEditar}
           onCerrar={() => setPedidoEditar(null)}
           onPedidoEditado={handlePedidoEditado}
+          usuarioActual={usuarioActual}
         />
       )}
 

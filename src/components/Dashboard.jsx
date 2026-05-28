@@ -238,7 +238,7 @@ export default function Dashboard({
       {/* ══════════════════════════════════════════
           SECCIÓN 1: PRODUCCIÓN DEL DÍA
           ══════════════════════════════════════════ */}
-      {usuarioActual?.rol === 'admin' && (
+      {['admin', 'superadmin'].includes(usuarioActual?.rol) && (
         <section className="mb-5">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
@@ -434,7 +434,7 @@ export default function Dashboard({
         </div>
 
         {/* Botón Cierre de Caja (Solo Admin) */}
-        {usuarioActual?.rol === 'admin' && (
+        {['admin', 'superadmin'].includes(usuarioActual?.rol) && (
           <div className="mb-4">
             <button
               onClick={handleCerrarCaja}

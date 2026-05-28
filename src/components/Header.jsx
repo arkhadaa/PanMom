@@ -4,7 +4,7 @@
 // =============================================
 
 import { useState, useRef, useEffect } from 'react'
-import { Menu, ShoppingBag, LayoutDashboard, ClipboardList, PlusCircle, Package, ChefHat, Wifi, WifiOff, CreditCard, Archive } from 'lucide-react'
+import { Menu, ShoppingBag, LayoutDashboard, ClipboardList, PlusCircle, Package, ChefHat, Wifi, WifiOff, CreditCard, Archive, ShieldCheck } from 'lucide-react'
 
 // Tabs de la barra principal (5 max)
 const TABS_PRINCIPALES = [
@@ -15,10 +15,15 @@ const TABS_PRINCIPALES = [
   { id: 'deudas', label: 'Fiados', Icon: CreditCard },
 ]
 
-// Tabs del menú lateral hamburguesa (solo admin)
-const TABS_MENU = [
+const TABS_MENU_ADMIN = [
   { id: 'historial', label: 'Cierres', Icon: Archive },
   { id: 'costos', label: 'Config', Icon: Package },
+]
+
+const TABS_MENU_SUPERADMIN = [
+  { id: 'historial', label: 'Cierres', Icon: Archive },
+  { id: 'costos', label: 'Config', Icon: Package },
+  { id: 'auditoria', label: 'Auditoría', Icon: ShieldCheck },
 ]
 
 export default function Header({ tabActivo, setTabActivo, conectado, usuarioActual, onLogout }) {
@@ -36,8 +41,10 @@ export default function Header({ tabActivo, setTabActivo, conectado, usuarioActu
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Filtrar tabs principales
-  const esAdmin = usuarioActual?.rol === 'admin'
+  const esAdmin      = ['admin', 'superadmin'].includes(usuarioActual?.rol)
+  const esSuperAdmin = usuarioActual?.rol === 'superadmin'
+  const tabsMenu     = esSuperAdmin ? TABS_MENU_SUPERADMIN : TABS_MENU_ADMIN
+
   const tabsVisibles = TABS_PRINCIPALES.filter(t => {
     if (!esAdmin) {
       return ['dashboard', 'pedidos', 'agregar', 'deudas'].includes(t.id)
@@ -66,7 +73,7 @@ export default function Header({ tabActivo, setTabActivo, conectado, usuarioActu
                   <div className="absolute top-full mt-2 left-0 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden text-gray-800 animate-fade-up">
                     <div className="p-2">
                       <p className="px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wide">Opciones</p>
-                      {TABS_MENU.map(({ id, label, Icon }) => (
+                      {tabsMenu.map(({ id, label, Icon }) => (
                         <button
                           key={id}
                           onClick={() => { setTabActivo(id); setMenuAbierto(false) }}
