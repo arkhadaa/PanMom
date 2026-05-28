@@ -81,7 +81,7 @@ export async function registrarHistorial(pedidoId, accion, usuario = 'sistema') 
 // ──────────────────────────────────────────
 
 /** Crea un pedido con sus líneas de producto. */
-export async function crearPedido({ nombreCliente, items = [], pagado, notas }) {
+export async function crearPedido({ nombreCliente, items = [], pagado, metodo_pago = 'efectivo', notas }) {
   const cliente    = await obtenerOCrearCliente(nombreCliente)
   const montoPesos = Math.round(items.reduce((s, i) => s + i.cantidad * i.precio_unitario, 0))
 
@@ -93,6 +93,7 @@ export async function crearPedido({ nombreCliente, items = [], pagado, notas }) 
       cantidad_sopaipillas: 0,
       monto_pesos:          montoPesos,
       pagado:               pagado || false,
+      metodo_pago:          pagado ? metodo_pago : null,
       estado:               'pendiente',
       notas:                notas || null,
       fecha_pedido:         new Date().toISOString(),
@@ -162,7 +163,7 @@ export async function actualizarEstado(pedidoId, nuevoEstado, usuario = 'sistema
 }
 
 /** Marca o desmarca el pago de un pedido. */
-export async function actualizarPago(pedidoId, pagado, usuario = 'sistema') {
+export async function actualizarPago(pedidoId, pagado, metodo_pago = 'efectivo', usuario = 'sistema') {
   // Auditoría: si lo marca como no pagado, revisar si antes estaba pagado
   let nuevasNotas = undefined
   if (!pagado) {
@@ -172,7 +173,10 @@ export async function actualizarPago(pedidoId, pagado, usuario = 'sistema') {
     }
   }
 
-  const payload = { pagado }
+  const payload = { 
+    pagado,
+    metodo_pago: pagado ? metodo_pago : null
+  }
   if (nuevasNotas !== undefined) {
     payload.notas = nuevasNotas
   }
@@ -190,7 +194,7 @@ export async function actualizarPago(pedidoId, pagado, usuario = 'sistema') {
 }
 
 /** Edita un pedido reemplazando sus líneas de producto. */
-export async function editarPedido(pedidoId, { nombreCliente, items = [], pagado, notas, estado }, usuario = 'sistema') {
+export async function editarPedido(pedidoId, { nombreCliente, items = [], pagado, metodo_pago = 'efectivo', notas, estado }, usuario = 'sistema') {
   const { data: original } = await supabase.from('pedidos').select('monto_pesos, pagado, notas, clientes(nombre)').eq('id', pedidoId).single()
   
   const cliente    = await obtenerOCrearCliente(nombreCliente)
@@ -221,6 +225,7 @@ export async function editarPedido(pedidoId, { nombreCliente, items = [], pagado
       cliente_id:  cliente.id,
       monto_pesos: montoPesos,
       pagado:      pagado || false,
+      metodo_pago: pagado ? metodo_pago : null,
       estado:      estado || 'pendiente',
       notas:       notasFinales || null,
     })
@@ -310,12 +315,12 @@ export async function listarDeudas() {
 }
 
 /** Marca múltiples pedidos como pagados. */
-export async function cobrarPedidos(ids) {
+export async function cobrarPedidos(ids, metodo_pago = 'efectivo') {
   if (!ids || ids.length === 0) return
   
   const { error } = await supabase
     .from('pedidos')
-    .update({ pagado: true })
+    .update({ pagado: true, metodo_pago })
     .in('id', ids)
 
   if (error) throw error

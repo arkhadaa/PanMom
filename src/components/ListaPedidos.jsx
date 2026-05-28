@@ -126,7 +126,7 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-bold text-gray-800 text-base truncate">
+            <h3 className="font-extrabold text-gray-800 text-xl md:text-2xl lg:text-3xl truncate">
               {pedido.clientes?.nombre || 'Sin nombre'}
             </h3>
             <span className={`badge ${claseBadgeEstado(pedido.estado)}`}>
@@ -139,7 +139,8 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
           </div>
         </div>
 
-        {/* Botón expandir */}
+        {/* Botón expandir (ya no se usa para notas, pero lo dejamos para futuras expansiones) */}
+        {/*
         <button
           onClick={() => setExpandido(v => !v)}
           className="btn-secondary !p-1.5 !rounded-lg flex-shrink-0"
@@ -150,35 +151,36 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
             : <ChevronDown size={16} />
           }
         </button>
+        */}
       </div>
 
       {/* ── Info rápida: items del pedido ── */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {(pedido.pedido_items?.length > 0) ? (
           pedido.pedido_items.map(item => (
-            <div key={item.id} className="bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1 text-sm font-semibold">
+            <div key={item.id} className="bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1 text-sm md:text-base lg:text-lg font-semibold">
               {item.cantidad}× {item.productos?.nombre || 'Producto'}
             </div>
           ))
         ) : (
           <>
             {pedido.cantidad_panes > 0 && (
-              <div className="flex items-center gap-1 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1 text-sm font-semibold">
-                <Wheat size={13} />
+              <div className="flex items-center gap-1 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1 text-sm md:text-base lg:text-lg font-semibold">
+                <Wheat size={15} className="md:w-5 md:h-5" />
                 <span>{pedido.cantidad_panes} pan{pedido.cantidad_panes !== 1 ? 'es' : ''}</span>
               </div>
             )}
             {pedido.cantidad_sopaipillas > 0 && (
-              <div className="flex items-center gap-1 bg-orange-50 text-orange-700 rounded-lg px-2.5 py-1 text-sm font-semibold">
-                <Flame size={13} />
+              <div className="flex items-center gap-1 bg-orange-50 text-orange-700 rounded-lg px-2.5 py-1 text-sm md:text-base lg:text-lg font-semibold">
+                <Flame size={15} className="md:w-5 md:h-5" />
                 <span>{pedido.cantidad_sopaipillas} sopaipilla{pedido.cantidad_sopaipillas !== 1 ? 's' : ''}</span>
               </div>
             )}
           </>
         )}
         {pedido.monto_pesos > 0 && (
-          <div className="flex items-center gap-1 bg-green-50 text-green-700 rounded-lg px-2.5 py-1 text-sm font-semibold">
-            <DollarSign size={13} />
+          <div className="flex items-center gap-1 bg-green-50 text-green-700 rounded-lg px-2.5 py-1 text-sm md:text-base lg:text-lg font-semibold">
+            <DollarSign size={15} className="md:w-5 md:h-5" />
             <span>{formatearPesos(pedido.monto_pesos)}</span>
           </div>
         )}
@@ -198,7 +200,7 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
           ) : (
             <XCircle size={11} />
           )}
-          {pedido.pagado ? 'Pagado' : 'Debe'}
+          {pedido.pagado ? `Pagado (${pedido.metodo_pago === 'transferencia' ? '📱 Transf.' : '💵 Efect.'})` : 'Debe'}
         </button>
       </div>
 
@@ -240,11 +242,11 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
         </button>
       </div>
 
-      {/* ── Sección expandida: notas ── */}
-      {expandido && pedido.notas && (
+      {/* ── Sección Notas Permanentes ── */}
+      {pedido.notas && (
         <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs font-semibold text-gray-500 mb-1">Notas:</p>
-          <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
+          <p className="text-xs md:text-sm lg:text-base font-semibold text-gray-500 mb-1">Notas del cliente:</p>
+          <p className="text-sm md:text-base lg:text-lg font-bold text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-100 uppercase tracking-wide">
             {esAdmin ? pedido.notas : pedido.notas.replace(/⚠️.*?(\n|$)/g, '').trim()}
           </p>
         </div>
@@ -282,8 +284,8 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
     }
 
     if (filtroEstado === 'todos') {
-      // En la pestaña "Todos", ocultamos la basura (anulados) para no ensuciar la vista
-      lista = lista.filter(p => p.estado !== 'anulado')
+      // En la pestaña "Todos", ocultamos la basura (anulados) y los ya terminados (entregados)
+      lista = lista.filter(p => p.estado !== 'anulado' && p.estado !== 'entregado')
     } else {
       lista = lista.filter(p => p.estado === filtroEstado)
     }

@@ -45,14 +45,13 @@ export default function Deudas() {
     setExpandido(prev => ({ ...prev, [nombre]: !prev[nombre] }))
   }
 
-  const handleCobrar = async (cliente) => {
-    if (!window.confirm(`¿Marcar como pagados los $${formatearPesos(cliente.total)} de ${cliente.nombre}?`)) {
-      return
-    }
+  const handleCobrar = async (cliente, metodo_pago) => {
+    if (!window.confirm(`¿Marcar todos los pedidos de ${cliente.nombre} como pagados con ${metodo_pago === 'efectivo' ? 'Efectivo' : 'Transferencia'}?`)) return
+    
     setProcesando(true)
     try {
       const ids = cliente.pedidos.map(p => p.id)
-      await cobrarPedidos(ids)
+      await cobrarPedidos(ids, metodo_pago)
       // Refrescar lista localmente
       setDeudas(prev => prev.filter(p => !ids.includes(p.id)))
     } catch (e) {
@@ -80,7 +79,7 @@ export default function Deudas() {
       </div>
 
       {clientesConDeuda.length > 0 && (
-        <div className="card bg-gradient-to-br from-red-500 to-rose-600 text-white mb-6 shadow-md">
+        <div className="rounded-2xl p-4 shadow-md bg-gradient-to-br from-red-500 to-rose-600 text-white mb-6">
           <p className="text-xs font-bold uppercase tracking-wider opacity-80 mb-1">
             Total por Cobrar
           </p>
@@ -151,18 +150,24 @@ export default function Deudas() {
                     ))}
                   </ul>
 
-                  <button
-                    onClick={() => handleCobrar(cliente)}
-                    disabled={procesando}
-                    className="btn-primary w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 border-none shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm"
-                  >
-                    {procesando ? (
-                      <Loader2 size={18} className="animate-spin" />
-                    ) : (
-                      <CheckCircle size={18} />
-                    )}
-                    Marcar todo como Cobrado
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleCobrar(cliente, 'efectivo')}
+                      disabled={procesando}
+                      className="btn-primary flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-600 border-none shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm flex flex-col items-center justify-center gap-1"
+                    >
+                      {procesando ? <Loader2 size={18} className="animate-spin" /> : <span className="text-xl">💵</span>}
+                      <span className="text-xs">Efectivo</span>
+                    </button>
+                    <button
+                      onClick={() => handleCobrar(cliente, 'transferencia')}
+                      disabled={procesando}
+                      className="btn-primary flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 border-none shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm flex flex-col items-center justify-center gap-1"
+                    >
+                      {procesando ? <Loader2 size={18} className="animate-spin" /> : <span className="text-xl">📱</span>}
+                      <span className="text-xs">Transf.</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

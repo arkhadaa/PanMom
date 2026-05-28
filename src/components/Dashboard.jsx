@@ -410,7 +410,8 @@ export default function Dashboard({
         {/* Resumen caja */}
         <div className="card !p-0 overflow-hidden mb-3">
           {[
-            { label: '✅ Cobrado',  value: caja.cobrado,       positivo: true  },
+            { label: '💵 Cobrado Efectivo',  value: caja.cobradoEfectivo,       positivo: true  },
+            { label: '📱 Cobrado Transferencia', value: caja.cobradoTransferencia, positivo: true  },
             { label: '📦 Gastos',   value: caja.totalGastos,   positivo: false },
             { label: '💸 Retiros',  value: caja.totalRetiros,  positivo: false },
           ].map(({ label, value, positivo }) => (
@@ -422,7 +423,10 @@ export default function Dashboard({
             </div>
           ))}
           <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t-2 border-gray-200">
-            <span className="font-bold text-gray-700">🏦 Caja real</span>
+            <div>
+              <span className="font-bold text-gray-700 block">🏦 Caja física</span>
+              <span className="text-[10px] text-gray-500 block leading-tight mt-0.5">Dinero real en cajón</span>
+            </div>
             <span className={`font-bold text-lg ${caja.caja >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatearPesos(caja.caja)}
             </span>

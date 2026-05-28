@@ -107,8 +107,9 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos }) {
   const [productos, setProductos]   = useState([])
   const [cantidades, setCantidades] = useState({}) // { producto_id: cantidad }
   const [nombreCliente, setNombre]  = useState('')
-  const [pagado, setPagado]         = useState(false)
-  const [notas, setNotas]           = useState('')
+  const [pagado, setPagado]               = useState(false)
+  const [metodoPago, setMetodoPago]       = useState('efectivo')
+  const [notas, setNotas]                 = useState('')
   const [guardando, setGuardando]   = useState(false)
   const [exito, setExito]           = useState(false)
   const [error, setError]           = useState(null)
@@ -184,6 +185,7 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos }) {
         nombreCliente: nombreCliente.trim(),
         items,
         pagado,
+        metodo_pago: pagado ? metodoPago : null,
         notas: notas.trim() || null,
       })
       setExito(true)
@@ -378,7 +380,32 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos }) {
             <p className="font-semibold text-gray-700 text-sm">Estado de pago</p>
             <p className="text-xs text-gray-400">¿El cliente ya pagó?</p>
           </div>
+        <div className="flex flex-col gap-2">
           <Toggle value={pagado} onChange={setPagado} labelOn="✓ Pagó" labelOff="Debe" />
+          
+          {pagado && (
+            <div className="flex bg-gray-100 rounded-lg p-1 animate-fade-up">
+              <button
+                type="button"
+                onClick={() => setMetodoPago('efectivo')}
+                className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+                  metodoPago === 'efectivo' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                💵 Efectivo
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetodoPago('transferencia')}
+                className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+                  metodoPago === 'transferencia' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                📱 Transf.
+              </button>
+            </div>
+          )}
+        </div>
         </div>
 
         {/* ── Notas ── */}

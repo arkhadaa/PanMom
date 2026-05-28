@@ -76,10 +76,11 @@ function FilaProducto({ producto, cantidad, onChange }) {
 export default function EditarPedido({ pedido, onCerrar, onPedidoEditado }) {
   const [productos, setProductos]   = useState([])
   const [cantidades, setCantidades] = useState({})
-  const [nombreCliente, setNombre]  = useState('')
-  const [pagado, setPagado]         = useState(false)
-  const [estado, setEstado]         = useState('pendiente')
-  const [notas, setNotas]           = useState('')
+  const [nombreCliente, setNombre]  = useState(pedido.clientes?.nombre || '')
+  const [pagado, setPagado]         = useState(pedido.pagado || false)
+  const [metodoPago, setMetodoPago] = useState(pedido.metodo_pago || 'efectivo')
+  const [estado, setEstado]         = useState(pedido.estado || 'pendiente')
+  const [notas, setNotas]           = useState(pedido.notas || '')
   const [guardando, setGuardando]   = useState(false)
   const [error, setError]           = useState(null)
 
@@ -93,6 +94,7 @@ export default function EditarPedido({ pedido, onCerrar, onPedidoEditado }) {
     if (!pedido) return
     setNombre(pedido.clientes?.nombre || '')
     setPagado(pedido.pagado || false)
+    setMetodoPago(pedido.metodo_pago || 'efectivo')
     setEstado(pedido.estado || 'pendiente')
     setNotas(pedido.notas || '')
 
@@ -127,6 +129,7 @@ export default function EditarPedido({ pedido, onCerrar, onPedidoEditado }) {
         nombreCliente: nombreCliente.trim(),
         items,
         pagado,
+        metodo_pago: pagado ? metodoPago : null,
         estado,
         notas: notas.trim() || null,
       })
@@ -272,9 +275,34 @@ export default function EditarPedido({ pedido, onCerrar, onPedidoEditado }) {
           </div>
 
           {/* Pago */}
-          <div className="card !py-3 flex items-center justify-between">
-            <p className="font-semibold text-gray-700 text-sm">Pago</p>
-            <Toggle value={pagado} onChange={setPagado} labelOn="✓ Pagó" labelOff="Debe" />
+          <div className="card !py-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-gray-700 text-sm">Pago</p>
+              <Toggle value={pagado} onChange={setPagado} labelOn="✓ Pagó" labelOff="Debe" />
+            </div>
+            
+            {pagado && (
+              <div className="flex bg-gray-100 rounded-lg p-1 mt-1 animate-fade-up">
+                <button
+                  type="button"
+                  onClick={() => setMetodoPago('efectivo')}
+                  className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+                    metodoPago === 'efectivo' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  💵 Efectivo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMetodoPago('transferencia')}
+                  className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+                    metodoPago === 'transferencia' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  📱 Transf.
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Notas */}

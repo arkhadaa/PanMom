@@ -42,12 +42,31 @@ export async function eliminarRetiro(id) {
 
 /**
  * Calcula el estado de caja del día.
- * Caja = Cobrado − Gastos − Retiros
+ * Caja Física = Cobrado (Efectivo) − Gastos − Retiros
  */
 export function calcularCajaHoy(pedidos, gastos, retiros) {
-  const cobrado      = (pedidos  || []).filter(p => p.pagado && p.estado !== 'anulado').reduce((s, p) => s + (p.monto_pesos || 0), 0)
+  const pedidosPagados = (pedidos || []).filter(p => p.pagado && p.estado !== 'anulado')
+  
+  // Lo que no tiene metodo_pago o es 'efectivo' se asume físico
+  const cobradoEfectivo = pedidosPagados
+    .filter(p => !p.metodo_pago || p.metodo_pago === 'efectivo')
+    .reduce((s, p) => s + (p.monto_pesos || 0), 0)
+
+  const cobradoTransferencia = pedidosPagados
+    .filter(p => p.metodo_pago === 'transferencia')
+    .reduce((s, p) => s + (p.monto_pesos || 0), 0)
+
   const totalGastos  = (gastos   || []).reduce((s, g) => s + (g.monto || 0), 0)
   const totalRetiros = (retiros  || []).reduce((s, r) => s + (r.monto || 0), 0)
-  const caja         = cobrado - totalGastos - totalRetiros
-  return { cobrado, totalGastos, totalRetiros, caja }
+  
+  const caja = cobradoEfectivo - totalGastos - totalRetiros
+  
+  return { 
+    cobrado: cobradoEfectivo + cobradoTransferencia,
+    cobradoEfectivo,
+    cobradoTransferencia,
+    totalGastos, 
+    totalRetiros, 
+    caja 
+  }
 }

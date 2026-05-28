@@ -5,6 +5,7 @@
 // =============================================
 
 import { useState, useEffect, useCallback } from 'react'
+import { X } from 'lucide-react'
 import Header from './components/Header'
 import Dashboard from './components/Dashboard'
 import AgregarPedido from './components/AgregarPedido'
@@ -30,11 +31,18 @@ import {
 } from './services/supabaseClient'
 
 // ─── Toast de notificación ────────────────────────────────────────────────────
-function Toast({ mensaje, visible }) {
+function Toast({ mensaje, visible, onClose }) {
   if (!visible) return null
   return (
-    <div className="toast">
-      {mensaje}
+    <div className="toast flex items-center justify-between gap-3 shadow-lg">
+      <span className="flex-1 font-medium">{mensaje}</span>
+      <button 
+        onClick={onClose} 
+        className="bg-black/20 hover:bg-black/30 p-1.5 rounded-full transition-colors flex-shrink-0"
+        title="Cerrar"
+      >
+        <X size={14} className="text-white" />
+      </button>
     </div>
   )
 }
@@ -188,6 +196,31 @@ export default function App() {
     cargarGastos()
     cargarRetiros()
   }, [supabaseConfigurado, cargarPedidos, cargarCostos, cargarProduccion, cargarGastos, cargarRetiros])
+
+  // ── Pull to refresh nativo (Soft Refresh) ──
+  useEffect(() => {
+    let startY = 0;
+    const handleTouchStart = (e) => {
+      if (window.scrollY === 0) startY = e.touches[0].clientY;
+    };
+    const handleTouchMove = (e) => {
+      const y = e.touches[0].clientY;
+      if (window.scrollY === 0 && y > startY + 130) {
+        cargarPedidos();
+        cargarProduccion();
+        cargarGastos();
+        cargarRetiros();
+        mostrarToast('🔄 Actualizando...');
+        startY = y + 1000; // Evita disparos múltiples
+      }
+    };
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [cargarPedidos, cargarProduccion, cargarGastos, cargarRetiros, mostrarToast])
 
   // ── Suscripción real-time ──
   useEffect(() => {
@@ -346,7 +379,11 @@ export default function App() {
         )}
       </main>
 
-      <Toast visible={toast.visible} mensaje={toast.mensaje} />
+      <Toast 
+        visible={toast.visible} 
+        mensaje={toast.mensaje} 
+        onClose={() => setToast({ visible: false, mensaje: '' })}
+      />
     </div>
   )
 }
