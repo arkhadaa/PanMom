@@ -4,7 +4,7 @@
 // =============================================
 
 import { useState, useRef, useEffect } from 'react'
-import { Menu, ShoppingBag, LayoutDashboard, ClipboardList, PlusCircle, Package, ChefHat, Wifi, WifiOff, CreditCard, Archive, ShieldCheck } from 'lucide-react'
+import { Menu, ShoppingBag, LayoutDashboard, ClipboardList, PlusCircle, Package, ChefHat, Wifi, WifiOff, CreditCard, Archive, ShieldCheck, PieChart } from 'lucide-react'
 
 // Tabs de la barra principal (5 max)
 const TABS_PRINCIPALES = [
@@ -12,19 +12,10 @@ const TABS_PRINCIPALES = [
   { id: 'pedidos', label: 'Pedidos', Icon: ClipboardList },
   { id: 'agregar', label: 'Agregar', Icon: PlusCircle },
   { id: 'produccion', label: 'Hornear', Icon: ChefHat },
-  { id: 'deudas', label: 'Fiados', Icon: CreditCard },
+  { id: 'deudas', label: 'Deudas', Icon: CreditCard },
 ]
 
-const TABS_MENU_ADMIN = [
-  { id: 'historial', label: 'Cierres', Icon: Archive },
-  { id: 'costos', label: 'Config', Icon: Package },
-]
 
-const TABS_MENU_SUPERADMIN = [
-  { id: 'historial', label: 'Cierres', Icon: Archive },
-  { id: 'costos', label: 'Config', Icon: Package },
-  { id: 'auditoria', label: 'Auditoría', Icon: ShieldCheck },
-]
 
 export default function Header({ tabActivo, setTabActivo, conectado, usuarioActual, onLogout }) {
   const [menuAbierto, setMenuAbierto] = useState(false)
@@ -41,14 +32,26 @@ export default function Header({ tabActivo, setTabActivo, conectado, usuarioActu
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const esAdmin      = ['admin', 'superadmin'].includes(usuarioActual?.rol)
+  const esVendedor = usuarioActual?.rol === 'vendedor'
+  const esProductor = usuarioActual?.rol === 'productor'
   const esSuperAdmin = usuarioActual?.rol === 'superadmin'
-  const tabsMenu     = esSuperAdmin ? TABS_MENU_SUPERADMIN : TABS_MENU_ADMIN
+
+  const verProduccion = esProductor || esSuperAdmin
+  const verCostos = esSuperAdmin
+  const verFinanzas = esSuperAdmin
+  const verAuditoria = esProductor || esSuperAdmin
+  const verHistorial = esSuperAdmin
+
+  const tabsMenu = []
+  if (verFinanzas) tabsMenu.push({ id: 'finanzas', label: 'Finanzas', Icon: PieChart })
+  if (verHistorial) tabsMenu.push({ id: 'historial', label: 'Cierres', Icon: Archive })
+  if (verCostos) tabsMenu.push({ id: 'costos', label: 'Config', Icon: Package })
+  if (verAuditoria) tabsMenu.push({ id: 'auditoria', label: 'Auditoría', Icon: ShieldCheck })
+
+  const mostrarHamburguesa = tabsMenu.length > 0
 
   const tabsVisibles = TABS_PRINCIPALES.filter(t => {
-    if (!esAdmin) {
-      return ['dashboard', 'pedidos', 'agregar', 'deudas'].includes(t.id)
-    }
+    if (t.id === 'produccion' && !verProduccion) return false
     return true
   })
 
@@ -58,8 +61,8 @@ export default function Header({ tabActivo, setTabActivo, conectado, usuarioActu
       <header className="header-gradient text-white sticky top-0 z-30 shadow-lg" ref={menuRef}>
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* Botón menú hamburguesa (Solo admins) */}
-            {esAdmin && (
+            {/* Botón menú hamburguesa */}
+            {mostrarHamburguesa && (
               <div className="relative">
                 <button
                   onClick={() => setMenuAbierto(!menuAbierto)}

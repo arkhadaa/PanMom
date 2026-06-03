@@ -7,12 +7,18 @@
 import { supabase } from './supabase'
 import { obtenerLimitesDiaNegocio } from './helpers'
 
+export const PUBLICO_GENERAL_ID = 7;
+
 // ──────────────────────────────────────────
 // CLIENTES (helper interno)
 // ──────────────────────────────────────────
 
 /** Busca un cliente por nombre; lo crea si no existe. */
 export async function obtenerOCrearCliente(nombre, telefono = null) {
+  if (!nombre || nombre.trim().toLowerCase() === 'público general') {
+    return { id: PUBLICO_GENERAL_ID, nombre: 'Público General' }
+  }
+
   const { data: existente, error: errBuscar } = await supabase
     .from('clientes')
     .select('*')
@@ -56,7 +62,7 @@ export async function listarClientesFrecuentes(limite = 5) {
   const unicos = []
   const ids = new Set()
   for (const row of (data || [])) {
-    if (row.clientes && !ids.has(row.clientes.id)) {
+    if (row.clientes && !ids.has(row.clientes.id) && row.clientes.id !== PUBLICO_GENERAL_ID) {
       ids.add(row.clientes.id)
       unicos.push(row.clientes)
       if (unicos.length >= limite) break
@@ -81,23 +87,23 @@ export async function registrarHistorial(pedidoId, accion, usuario = 'sistema') 
 // ──────────────────────────────────────────
 
 /** Crea un pedido con sus líneas de producto. */
-export async function crearPedido({ nombreCliente, items = [], pagado, metodo_pago = 'efectivo', notas, usuario = 'sistema' }) {
+export async function crearPedido({ nombreCliente, items = [], metodoPago = 'fiado', montoEfectivo, notas, fechaEntrega, usuario = 'sistema' }) {
   const cliente    = await obtenerOCrearCliente(nombreCliente)
   const montoPesos = Math.round(items.reduce((s, i) => s + i.cantidad * i.precio_unitario, 0))
 
+  const insertData = {
+    cliente_id:   cliente.id,
+    monto_pesos:  montoPesos,
+    estado:       'pendiente',
+    notas:        notas || null,
+    fecha_entrega: fechaEntrega || null,
+    fecha_pedido: new Date().toISOString(),
+    usuario:      usuario
+  }
+
   const { data, error } = await supabase
     .from('pedidos')
-    .insert({
-      cliente_id:           cliente.id,
-      cantidad_panes:       0,
-      cantidad_sopaipillas: 0,
-      monto_pesos:          montoPesos,
-      pagado:               pagado || false,
-      metodo_pago:          pagado ? metodo_pago : null,
-      estado:               'pendiente',
-      notas:                notas || null,
-      fecha_pedido:         new Date().toISOString(),
-    })
+    .insert(insertData)
     .select('*, clientes ( id, nombre, telefono )')
     .single()
 
@@ -115,28 +121,50 @@ export async function crearPedido({ nombreCliente, items = [], pagado, metodo_pa
     if (errItems) console.warn('pedido_items insert:', errItems.message)
   }
 
+  // Insertar pago si no es fiado
+  if (metodoPago !== 'fiado') {
+    let ef = 0;
+    let tr = 0;
+    if (metodoPago === 'efectivo') ef = montoPesos;
+    else if (metodoPago === 'transferencia') tr = montoPesos;
+    else if (metodoPago === 'mixto') {
+      ef = Number(montoEfectivo) || 0;
+      tr = Math.max(0, montoPesos - ef);
+    }
+
+    if (ef + tr > 0) {
+      const { error: errPago } = await supabase
+        .from('pagos_cliente')
+        .insert({
+          cliente_id: cliente.id,
+          pedido_id: data.id,
+          monto_efectivo: ef,
+          monto_transferencia: tr,
+          usuario: usuario,
+          notas: `Pago directo en creación`
+        });
+      if (errPago) console.warn('pagos_cliente insert:', errPago.message);
+    }
+  }
+
   await registrarHistorial(data.id, 'Pedido creado', usuario)
   return data
 }
 
-/** Lista los pedidos de hoy con cliente e items.
- *  Si pedido_items no existe aún, cae al query básico.
- */
+/** Lista los pedidos de hoy con cliente e items. */
 export async function listarPedidosHoy() {
   const { inicio, fin } = obtenerLimitesDiaNegocio()
 
-  // Con join completo
   const { data, error } = await supabase
     .from('pedidos')
-    .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, cantidad, precio_unitario, productos ( id, nombre, precio_venta ) )')
+    .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, producto_id, cantidad, precio_unitario, productos ( id, nombre, precio_venta, receta_id, cantidad_panes ) ), pagos_cliente ( monto_efectivo, monto_transferencia )')
     .gte('fecha_pedido', inicio.toISOString())
     .lte('fecha_pedido', fin.toISOString())
     .order('fecha_pedido', { ascending: false })
 
   if (!error) return data || []
 
-  // Fallback sin items (tabla no existe aún)
-  console.warn('listarPedidosHoy: fallback sin items —', error.message)
+  console.warn('listarPedidosHoy fallback:', error.message)
   const { data: data2, error: error2 } = await supabase
     .from('pedidos')
     .select('*, clientes ( id, nombre, telefono )')
@@ -162,82 +190,35 @@ export async function actualizarEstado(pedidoId, nuevoEstado, usuario = 'sistema
   return data
 }
 
-/** Marca o desmarca el pago de un pedido. */
-export async function actualizarPago(pedidoId, pagado, metodo_pago = 'efectivo', usuario = 'sistema') {
-  // Auditoría: si lo marca como no pagado, revisar si antes estaba pagado
-  let nuevasNotas = undefined
-  if (!pagado) {
-    const { data: original } = await supabase.from('pedidos').select('pagado, notas').eq('id', pedidoId).single()
-    if (original && original.pagado) {
-      nuevasNotas = `⚠️ [${usuario}] Cambió de PAGADO a DEUDA. ${(original.notas || '')}`.trim()
-    }
-  }
-
-  const payload = { 
-    pagado,
-    metodo_pago: pagado ? metodo_pago : null
-  }
-  if (nuevasNotas !== undefined) {
-    payload.notas = nuevasNotas
-  }
-
-  const { data, error } = await supabase
-    .from('pedidos')
-    .update(payload)
-    .eq('id', pedidoId)
-    .select('*, clientes ( id, nombre, telefono )')
-    .single()
-
-  if (error) throw error
-  await registrarHistorial(pedidoId, pagado ? 'Marcado como pagado' : 'Pago revertido (anulado pago)', usuario)
-  return data
-}
-
 /** Edita un pedido reemplazando sus líneas de producto. */
-export async function editarPedido(pedidoId, { nombreCliente, items = [], pagado, metodo_pago = 'efectivo', notas, estado }, usuario = 'sistema') {
-  const { data: original } = await supabase.from('pedidos').select('monto_pesos, pagado, notas, clientes(nombre)').eq('id', pedidoId).single()
-  
-  const cliente    = await obtenerOCrearCliente(nombreCliente)
-  const montoPesos = Math.round(items.reduce((s, i) => s + i.cantidad * i.precio_unitario, 0))
-  
-  let notasFinales = notas || ''
-  let alerta = ''
-  
-  if (original && original.monto_pesos > montoPesos) {
-    alerta += `⚠️ [${usuario}] Bajó monto de $${original.monto_pesos} a $${montoPesos}. `
-  }
-  
-  if (original && original.pagado === true && pagado === false) {
-    alerta += `⚠️ [${usuario}] Cambió de PAGADO a DEUDA. `
-  }
+export async function editarPedido(pedidoId, { nombreCliente, items = [], notas, fechaEntrega, estado }, usuario = 'sistema') {
+  const { data: original } = await supabase.from('pedidos').select('monto_pesos, notas, clientes(nombre)').eq('id', pedidoId).single()
 
-  if (original && original.clientes && original.clientes.nombre !== nombreCliente.trim()) {
-    alerta += `⚠️ [${usuario}] Cambió cliente de "${original.clientes.nombre}" a "${nombreCliente.trim()}". `
-  }
-  
-  if (alerta) {
-    notasFinales = (alerta + '\n' + (original.notas || '') + '\n' + notasFinales).trim()
+  const cliente = await obtenerOCrearCliente(nombreCliente)
+
+  const montoPesos = items.length > 0
+    ? Math.round(items.reduce((s, i) => s + i.cantidad * i.precio_unitario, 0))
+    : (original?.monto_pesos ?? 0)
+
+  const updateData = {
+    cliente_id:    cliente.id,
+    monto_pesos:   montoPesos,
+    estado:        estado || 'pendiente',
+    notas:         notas ? notas.trim() : null,
+    fecha_entrega: fechaEntrega !== undefined ? fechaEntrega : undefined,
   }
 
   const { data, error } = await supabase
     .from('pedidos')
-    .update({
-      cliente_id:  cliente.id,
-      monto_pesos: montoPesos,
-      pagado:      pagado || false,
-      metodo_pago: pagado ? metodo_pago : null,
-      estado:      estado || 'pendiente',
-      notas:       notasFinales || null,
-    })
+    .update(updateData)
     .eq('id', pedidoId)
     .select('*, clientes ( id, nombre, telefono )')
     .single()
 
   if (error) throw error
 
-  // Reemplazar líneas de producto
-  await supabase.from('pedido_items').delete().eq('pedido_id', pedidoId)
   if (items.length > 0) {
+    await supabase.from('pedido_items').delete().eq('pedido_id', pedidoId)
     const { error: errItems } = await supabase
       .from('pedido_items')
       .insert(items.map(i => ({
@@ -264,6 +245,10 @@ export async function anularPedido(pedidoId, usuario = 'sistema') {
     
   if (error) throw error
   await registrarHistorial(pedidoId, 'Pedido ANULADO', usuario)
+  
+  // Opcional: si un pedido se anula, se podrian anular sus pagos, 
+  // pero para no complicar el modelo ahora mismo, 
+  // confiamos en que el admin los arregle o no se devuelva.
   return data
 }
 
@@ -286,58 +271,13 @@ export function suscribirPedidos(callback) {
   return () => { supabase.removeChannel(channel) }
 }
 
-// ──────────────────────────────────────────
-// DEUDAS (FIADOS)
-// ──────────────────────────────────────────
-
-/** Lista todos los pedidos pendientes de pago (histórico). */
-export async function listarDeudas() {
-  const hace90dias = new Date()
-  hace90dias.setDate(hace90dias.getDate() - 90)
-
-  const { data, error } = await supabase
-    .from('pedidos')
-    .select(`
-      *,
-      clientes ( id, nombre, telefono ),
-      pedido_items (
-        cantidad,
-        precio_unitario,
-        productos ( nombre )
-      )
-    `)
-    .eq('pagado', false)
-    .neq('estado', 'anulado')
-    .gte('fecha_pedido', hace90dias.toISOString())
-    .order('fecha_pedido', { ascending: false })
-    .limit(200)
-
-  if (error) {
-    console.error('Error listando deudas:', error)
-    return []
-  }
-  return data
-}
-
 /** Trae un pedido individual con todos sus joins (usado por real-time). */
 export async function obtenerPedidoConDetalle(pedidoId) {
   const { data, error } = await supabase
     .from('pedidos')
-    .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, cantidad, precio_unitario, productos ( id, nombre, precio_venta ) )')
+    .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, producto_id, cantidad, precio_unitario, productos ( id, nombre, precio_venta, receta_id, cantidad_panes ) ), pagos_cliente ( monto_efectivo, monto_transferencia )')
     .eq('id', pedidoId)
     .single()
   if (error) throw error
   return data
-}
-
-/** Marca múltiples pedidos como pagados. */
-export async function cobrarPedidos(ids, metodo_pago = 'efectivo') {
-  if (!ids || ids.length === 0) return
-  
-  const { error } = await supabase
-    .from('pedidos')
-    .update({ pagado: true, metodo_pago })
-    .in('id', ids)
-
-  if (error) throw error
 }

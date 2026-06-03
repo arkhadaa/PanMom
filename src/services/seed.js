@@ -75,6 +75,7 @@ export async function seedDatosIniciales() {
     // ── 4. Catálogo de productos ───────────────────────────────────────────
     const PRODUCTOS_BASE = [
       { nombre: 'Pan corriente', precio_venta: 300,  tiene_receta: true  },
+      { nombre: 'Oferta 7x2000', precio_venta: 2000, tiene_receta: true, cantidad_panes: 7 },
       { nombre: 'Pan de huevo',  precio_venta: 1000, tiene_receta: false },
       { nombre: 'Consomé',       precio_venta: 1000, tiene_receta: false },
       { nombre: 'Té',            precio_venta: 500,  tiene_receta: false },
@@ -89,11 +90,31 @@ export async function seedDatosIniciales() {
       }
     }
 
-    // Vincular "Pan corriente" con su receta
+    // Vincular todos los productos que consumen un pan de la producción.
+    // Excluye bebidas (té, café, consomé) — el resto son pan o sandwich con pan base.
     await supabase.from('productos')
       .update({ receta_id: recetaId })
-      .ilike('nombre', 'pan corriente')
+      .not('nombre', 'ilike', '%té%')
+      .not('nombre', 'ilike', '%cafe%')
+      .not('nombre', 'ilike', '%café%')
+      .not('nombre', 'ilike', '%consom%')
       .is('receta_id', null)
+
+    // Oferta = 7 panes físicos por unidad vendida
+    await supabase.from('productos')
+      .update({ cantidad_panes: 7 })
+      .ilike('nombre', '%oferta%')
+      .or('cantidad_panes.is.null,cantidad_panes.eq.1')
+
+    // ── 5. Usuarios Base (PIN) ──────────────────────────────────────────────
+    const { data: usuariosExistentes } = await supabase.from('usuarios_pin').select('id')
+    if (!usuariosExistentes || usuariosExistentes.length === 0) {
+      await supabase.from('usuarios_pin').insert([
+        { nombre: 'Dueño', pin: '1234', rol: 'superadmin' },
+        { nombre: 'Caja',  pin: '1111', rol: 'vendedor' },
+        { nombre: 'Vendedor', pin: '2222', rol: 'vendedor' }
+      ])
+    }
 
   } catch (err) {
     console.warn('Seed:', err.message)

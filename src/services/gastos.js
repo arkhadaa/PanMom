@@ -7,13 +7,14 @@ import { supabase } from './supabase'
 import { obtenerLimitesDiaNegocio } from './helpers'
 
 /** Registra un gasto del día. */
-export async function registrarGasto({ descripcion, monto }) {
+export async function registrarGasto({ descripcion, monto, usuario }) {
   const { data, error } = await supabase
     .from('gastos')
     .insert({
       descripcion: descripcion.trim(),
       monto:       Math.round(Number(monto) || 0),
       fecha_gasto: new Date().toISOString(),
+      usuario:     usuario || 'sistema',
     })
     .select()
     .single()

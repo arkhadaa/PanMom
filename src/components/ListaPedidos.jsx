@@ -3,7 +3,7 @@
 // Lista de pedidos del día con acciones
 // =============================================
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   ChefHat,
   PackageCheck,
@@ -25,13 +25,58 @@ import {
 } from 'lucide-react'
 import {
   actualizarEstado,
-  actualizarPago,
   anularPedido,
   formatearPesos,
   claseBadgeEstado,
   LABELS_ESTADO,
 } from '../services/supabaseClient'
 import EditarPedido from './EditarPedido'
+
+// ─── Timer Dinámico ───────────────────────────────────────────────────────────
+function TimerPedido({ fechaPedido, fechaEntrega, estado }) {
+  const [ahora, setAhora] = useState(new Date())
+
+  useEffect(() => {
+    // Solo actualizar si está pendiente o listo
+    if (estado === 'entregado' || estado === 'anulado') return
+    const timer = setInterval(() => setAhora(new Date()), 30000) // cada 30 seg
+    return () => clearInterval(timer)
+  }, [estado])
+
+  if (estado === 'entregado' || estado === 'anulado') return null
+
+  if (fechaEntrega) {
+    const fEntrega = new Date(fechaEntrega)
+    const diffMin = Math.round((fEntrega - ahora) / 60000)
+
+    if (diffMin > 60) {
+      const horas = Math.floor(diffMin / 60)
+      const mins = diffMin % 60
+      return <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded ml-1 text-[10px]">Faltan {horas}h {mins}m</span>
+    } else if (diffMin > 0) {
+      return <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded ml-1 text-[10px]">Faltan {diffMin} min</span>
+    } else if (diffMin === 0) {
+      return <span className="font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded ml-1 text-[10px]">¡Es hora!</span>
+    } else {
+      return <span className="font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded ml-1 text-[10px]">Atrasado {Math.abs(diffMin)} min</span>
+    }
+  }
+
+  // Pedido normal
+  const fPedido = new Date(fechaPedido)
+  const diffMin = Math.max(0, Math.floor((ahora - fPedido) / 60000))
+  
+  let color = 'text-gray-500 bg-gray-100'
+  if (diffMin >= 30) color = 'text-red-600 bg-red-100'
+  else if (diffMin >= 15) color = 'text-orange-600 bg-orange-100'
+
+  return (
+    <span className={`font-bold px-1.5 py-0.5 rounded ml-1 text-[10px] ${color}`}>
+      ⏳ {diffMin} min
+    </span>
+  )
+}
+
 
 // ─── Confirmación de eliminación ─────────────────────────────────────────────
 function ConfirmarEliminar({ pedido, onConfirmar, onCancelar, esAdmin }) {
@@ -66,9 +111,16 @@ function ConfirmarEliminar({ pedido, onConfirmar, onCancelar, esAdmin }) {
 }
 
 // ─── Tarjeta individual de pedido ─────────────────────────────────────────────
-function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, usuarioActual }) {
+function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, usuarioActual, onIrADeudas }) {
   const [expandido, setExpandido] = useState(false)
-  const [cargandoAccion, setCargandoAccion] = useState(null) // 'produciendo' | 'entregado' | 'pago'
+  const [cargandoAccion, setCargandoAccion] = useState(null) // 'estado'
+
+  const pagos = pedido.pagos_cliente || []
+  const abonado = pagos.reduce((s, p) => s + (p.monto_efectivo || 0) + (p.monto_transferencia || 0), 0)
+  const ef = pagos.reduce((s, p) => s + (p.monto_efectivo || 0), 0)
+  const tr = pagos.reduce((s, p) => s + (p.monto_transferencia || 0), 0)
+  const pagado = (pedido.monto_pesos || 0) > 0 && abonado >= pedido.monto_pesos
+  const deudaPendiente = Math.max(0, (pedido.monto_pesos || 0) - abonado)
 
   const hora = new Intl.DateTimeFormat('es-CL', {
     hour: '2-digit',
@@ -76,16 +128,14 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
   }).format(new Date(pedido.fecha_pedido))
 
   const sigEstado = {
-    pendiente:   'produciendo',
-    produciendo: 'listo',
-    listo:       'entregado',
-    entregado:   null,
+    pendiente: 'listo',
+    listo:     'entregado',
+    entregado: null,
   }[pedido.estado]
 
   const accionEstado = {
-    produciendo: { label: 'Marcar produciendo', icon: ChefHat, clase: 'btn-info' },
-    listo:       { label: 'Marcar listo',       icon: PackageCheck, clase: 'btn-success' },
-    entregado:   { label: 'Marcar entregado',   icon: PackageCheck, clase: 'btn-success' },
+    listo:     { label: 'Marcar listo',     icon: PackageCheck, clase: 'btn-success' },
+    entregado: { label: 'Marcar entregado', icon: PackageCheck, clase: 'btn-success' },
   }[sigEstado] || null
 
   const handleCambiarEstado = async () => {
@@ -101,25 +151,12 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
     }
   }
 
-  const handleTogglePago = async () => {
-    if (cargandoAccion) return
-    setCargandoAccion('pago')
-    try {
-      const updated = await actualizarPago(pedido.id, !pedido.pagado, usuarioActual?.nombre || 'sistema')
-      onActualizar(updated)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setCargandoAccion(null)
-    }
-  }
-
   return (
     <div className={`card animate-slide-in border-l-4 ${
       pedido.estado === 'anulado'   ? 'border-l-red-500 opacity-60 bg-red-50/30' :
       pedido.estado === 'entregado' ? 'border-l-gray-300 opacity-75' :
       pedido.estado === 'listo'     ? 'border-l-green-400' :
-      pedido.estado === 'produciendo' ? 'border-l-blue-400' :
+      pedido.estado === 'produciendo' ? 'border-l-blue-400' : // legacy
       'border-l-orange-400'
     }`}>
 
@@ -134,9 +171,20 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
               {LABELS_ESTADO[pedido.estado] || pedido.estado}
             </span>
           </div>
-          <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+          <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5 flex-wrap">
             <Clock size={11} />
-            <span>{hora}</span>
+            <span>Creado: {hora}</span>
+            <TimerPedido fechaPedido={pedido.fecha_pedido} fechaEntrega={pedido.fecha_entrega} estado={pedido.estado} />
+            
+            {pedido.fecha_entrega && (
+              <>
+                <span className="mx-1 hidden sm:inline">•</span>
+                <span className="font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded flex items-center gap-1 w-full sm:w-auto mt-1 sm:mt-0">
+                  <Clock size={12} className="inline-block" />
+                  Entrega: {new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit' }).format(new Date(pedido.fecha_entrega))}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -158,8 +206,8 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
       {/* ── Info rápida: items del pedido ── */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {(pedido.pedido_items?.length > 0) ? (
-          pedido.pedido_items.map(item => (
-            <div key={item.id} className="bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1 text-sm md:text-base lg:text-lg font-semibold">
+          pedido.pedido_items.map((item, i) => (
+            <div key={item.id || i} className="bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1 text-sm md:text-base lg:text-lg font-semibold">
               {item.cantidad}× {item.productos?.nombre || 'Producto'}
             </div>
           ))
@@ -188,21 +236,32 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
       </div>
 
       {/* ── Badge pago ── */}
-      <div className="flex items-center gap-2 mb-3">
-        <button
-          onClick={handleTogglePago}
-          disabled={!!cargandoAccion}
-          className={`badge ${pedido.pagado ? 'badge-pagado' : 'badge-debe'} cursor-pointer hover:opacity-80 transition-opacity`}
-        >
-          {cargandoAccion === 'pago' ? (
-            <Loader2 size={11} className="animate-spin" />
-          ) : pedido.pagado ? (
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {pagado ? (
+          <span className="badge badge-pagado">
             <CheckCircle2 size={11} />
-          ) : (
-            <XCircle size={11} />
-          )}
-          {pedido.pagado ? `Pagado (${pedido.metodo_pago === 'transferencia' ? '📱 Transf.' : '💵 Efect.'})` : 'Debe'}
-        </button>
+            {ef > 0 && tr > 0
+              ? `Pagado (💵 $${ef.toLocaleString('es-CL')} + 📱 $${tr.toLocaleString('es-CL')})`
+              : tr > 0 ? 'Pagado (📱 Transf.)'
+              : 'Pagado (💵 Efect.)'
+            }
+          </span>
+        ) : (
+          <>
+            <span className="badge badge-debe">
+              <XCircle size={11} />
+              {abonado > 0 ? `Abono $${abonado.toLocaleString('es-CL')} (Debe $${deudaPendiente.toLocaleString('es-CL')})` : 'Fiado'}
+            </span>
+            {onIrADeudas && (
+              <button
+                onClick={onIrADeudas}
+                className="text-xs text-orange-500 font-bold underline underline-offset-2 flex items-center gap-0.5"
+              >
+                Cobrar en Deudas →
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {/* ── Botones de acción rápida ── */}
@@ -247,8 +306,8 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
       {pedido.notas && (
         <div className="mt-3 pt-3 border-t border-gray-100">
           <p className="text-xs md:text-sm lg:text-base font-semibold text-gray-500 mb-1">Notas del cliente:</p>
-          <p className="text-sm md:text-base lg:text-lg font-bold text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-100 uppercase tracking-wide">
-            {esAdmin ? pedido.notas : pedido.notas.replace(/⚠️.*?(\n|$)/g, '').trim()}
+          <p className="text-sm md:text-base lg:text-lg font-bold text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-100 uppercase tracking-wide whitespace-pre-wrap">
+            {pedido.notas}
           </p>
         </div>
       )}
@@ -258,15 +317,14 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
 
 // ─── Lista principal ──────────────────────────────────────────────────────────
 const FILTROS = [
-  { value: 'todos',       label: 'Todos'        },
-  { value: 'pendiente',   label: 'Pendientes'   },
-  { value: 'produciendo', label: 'Produciendo'  },
-  { value: 'listo',       label: 'Listos'       },
-  { value: 'entregado',   label: 'Entregados'   },
-  { value: 'anulado',     label: 'Anulados'     },
+  { value: 'todos',     label: 'Todos'      },
+  { value: 'pendiente', label: 'Pendientes' },
+  { value: 'listo',     label: 'Listos'     },
+  { value: 'entregado', label: 'Entregados' },
+  { value: 'anulado',   label: 'Anulados'   },
 ]
 
-export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, usuarioActual, onActualizar }) {
+export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, usuarioActual, onActualizar, onIrADeudas }) {
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [pedidoEditar, setPedidoEditar] = useState(null)
@@ -432,6 +490,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
               onEliminar={setPedidoEliminar}
               esAdmin={esAdmin}
               usuarioActual={usuarioActual}
+              onIrADeudas={onIrADeudas}
             />
           ))}
         </div>

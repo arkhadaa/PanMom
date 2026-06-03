@@ -5,35 +5,14 @@
 // =============================================
 
 import { useState, useEffect } from 'react'
-import { X, Save, Loader2, User, ShoppingCart, DollarSign, FileText, Plus, Minus } from 'lucide-react'
+import { X, Save, Loader2, User, ShoppingCart, DollarSign, FileText, Plus, Minus, Clock } from 'lucide-react'
 import { editarPedido, listarProductos, formatearPesos } from '../services/supabaseClient'
 
 const ESTADOS = [
-  { value: 'pendiente',   label: '⏳ Pendiente'   },
-  { value: 'produciendo', label: '👨‍🍳 Produciendo' },
-  { value: 'listo',       label: '✅ Listo'        },
-  { value: 'entregado',   label: '📦 Entregado'    },
+  { value: 'pendiente', label: '⏳ Pendiente' },
+  { value: 'listo',     label: '✅ Listo'     },
+  { value: 'entregado', label: '📦 Entregado' },
 ]
-
-function Toggle({ value, onChange, labelOn, labelOff }) {
-  return (
-    <div
-      className="toggle-container"
-      onClick={() => onChange(!value)}
-      role="switch"
-      aria-checked={value}
-      tabIndex={0}
-      onKeyDown={e => e.key === ' ' && onChange(!value)}
-    >
-      <div className={`toggle-track ${value ? 'on' : 'off'}`}>
-        <div className={`toggle-thumb ${value ? 'on' : 'off'}`} />
-      </div>
-      <span className={`text-sm font-semibold ${value ? 'text-green-600' : 'text-gray-500'}`}>
-        {value ? labelOn : labelOff}
-      </span>
-    </div>
-  )
-}
 
 function FilaProducto({ producto, cantidad, onChange }) {
   return (
@@ -77,10 +56,11 @@ export default function EditarPedido({ pedido, onCerrar, onPedidoEditado, usuari
   const [productos, setProductos]   = useState([])
   const [cantidades, setCantidades] = useState({})
   const [nombreCliente, setNombre]  = useState(pedido.clientes?.nombre || '')
-  const [pagado, setPagado]         = useState(pedido.pagado || false)
-  const [metodoPago, setMetodoPago] = useState(pedido.metodo_pago || 'efectivo')
-  const [estado, setEstado]         = useState(pedido.estado || 'pendiente')
-  const [notas, setNotas]           = useState(pedido.notas || '')
+  const [estado, setEstado]               = useState(pedido.estado || 'pendiente')
+  const [horaEntrega, setHoraEntrega] = useState(
+    pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : ''
+  )
+  const [notas, setNotas]                 = useState(pedido.notas || '')
   const [guardando, setGuardando]   = useState(false)
   const [error, setError]           = useState(null)
 
@@ -93,9 +73,8 @@ export default function EditarPedido({ pedido, onCerrar, onPedidoEditado, usuari
   useEffect(() => {
     if (!pedido) return
     setNombre(pedido.clientes?.nombre || '')
-    setPagado(pedido.pagado || false)
-    setMetodoPago(pedido.metodo_pago || 'efectivo')
     setEstado(pedido.estado || 'pendiente')
+    setHoraEntrega(pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '')
     setNotas(pedido.notas || '')
 
     // Pre-fill cantidades desde pedido_items
@@ -125,13 +104,20 @@ export default function EditarPedido({ pedido, onCerrar, onPedidoEditado, usuari
     setGuardando(true)
     setError(null)
     try {
+      let fecha_entrega = null
+      if (horaEntrega) {
+        const hoy = new Date()
+        const [h, m] = horaEntrega.split(':')
+        hoy.setHours(Number(h), Number(m), 0, 0)
+        fecha_entrega = hoy.toISOString()
+      }
+
       const pedidoActualizado = await editarPedido(pedido.id, {
-        nombreCliente: nombreCliente.trim(),
+        nombreCliente:  nombreCliente.trim(),
         items,
-        pagado,
-        metodo_pago: pagado ? metodoPago : null,
         estado,
-        notas: notas.trim() || null,
+        fecha_entrega,
+        notas:          notas.trim() || null,
       }, usuarioActual?.nombre || 'sistema')
       onPedidoEditado?.(pedidoActualizado)
       onCerrar()
@@ -274,35 +260,43 @@ export default function EditarPedido({ pedido, onCerrar, onPedidoEditado, usuari
             </div>
           </div>
 
-          {/* Pago */}
-          <div className="card !py-3 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <p className="font-semibold text-gray-700 text-sm">Pago</p>
-              <Toggle value={pagado} onChange={setPagado} labelOn="✓ Pagó" labelOff="Debe" />
+
+          {/* Hora de entrega */}
+          <div>
+            <label className="input-label">
+              <span className="flex items-center gap-1.5">
+                <Clock size={14} className="text-orange-500" />
+                Hora de entrega <span className="font-normal text-gray-400">(opcional)</span>
+              </span>
+            </label>
+            <input
+              type="time"
+              value={horaEntrega}
+              onChange={e => setHoraEntrega(e.target.value)}
+              className="input-field w-full"
+            />
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
+                { label: 'Ahora', value: '' },
+                { label: '13:00', value: '13:00' },
+                { label: '15:00', value: '15:00' },
+                { label: '17:30', value: '17:30' },
+                { label: '19:30', value: '19:30' }
+              ].map(btn => (
+                <button
+                  key={btn.label}
+                  type="button"
+                  onClick={() => setHoraEntrega(btn.value)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${
+                    horaEntrega === btn.value
+                      ? 'bg-orange-500 text-white border-orange-500'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  {btn.label}
+                </button>
+              ))}
             </div>
-            
-            {pagado && (
-              <div className="flex bg-gray-100 rounded-lg p-1 mt-1 animate-fade-up">
-                <button
-                  type="button"
-                  onClick={() => setMetodoPago('efectivo')}
-                  className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-colors ${
-                    metodoPago === 'efectivo' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  💵 Efectivo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMetodoPago('transferencia')}
-                  className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-colors ${
-                    metodoPago === 'transferencia' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  📱 Transf.
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Notas */}

@@ -16,14 +16,18 @@ import Produccion from './components/Produccion'
 import LoginPIN from './components/LoginPIN'
 import Deudas from './components/Deudas'
 import HistorialCierres from './components/HistorialCierres'
+import Finanzas from './components/Finanzas'
 import Auditoria from './components/Auditoria'
 import {
   listarPedidosHoy,
   listarProduccionHoy,
   listarGastosHoy,
   listarRetirosHoy,
+  obtenerCajaHoy,
   registrarRetiro,
   eliminarRetiro,
+  registrarGasto,
+  eliminarGasto,
   suscribirPedidos,
   calcularCostosUnitarios,
   seedDatosIniciales,
@@ -114,6 +118,7 @@ export default function App() {
   const [retiros, setRetiros]       = useState([])
   const [cargando, setCargando]     = useState(true)
   const [conectado, setConectado]   = useState(true)
+  const [cajaHoy, setCajaHoy]       = useState({ ingresos_efectivo: 0, ingresos_transferencia: 0, total_gastos: 0, total_retiros: 0, caja_efectivo_final: 0 })
 
   // Auth State
   const [usuarioActual, setUsuarioActual] = useState(obtenerSesionLocal())
@@ -177,6 +182,16 @@ export default function App() {
     }
   }, [supabaseConfigurado])
 
+  const cargarCajaHoy = useCallback(async () => {
+    if (!supabaseConfigurado) return
+    try {
+      const data = await obtenerCajaHoy()
+      setCajaHoy(data)
+    } catch (err) {
+      console.warn('CajaHoy:', err.message)
+    }
+  }, [supabaseConfigurado])
+
   const cargarRetiros = useCallback(async () => {
     if (!supabaseConfigurado) return
     try {
@@ -190,17 +205,18 @@ export default function App() {
   // ── Seed automático + carga inicial ──
   useEffect(() => {
     if (!supabaseConfigurado) return
-    const esAdmin = ['admin', 'superadmin'].includes(usuarioActual?.rol)
+    const verProduccion = ['productor', 'superadmin'].includes(usuarioActual?.rol)
+    const verCostos = usuarioActual?.rol === 'superadmin'
+
     seedDatosIniciales().then(() => {
-      if (esAdmin) {
-        cargarCostos()
-        cargarProduccion()
-      }
+      if (verCostos) cargarCostos()
+      if (verProduccion) cargarProduccion()
     })
     cargarPedidos()
     cargarGastos()
     cargarRetiros()
-  }, [supabaseConfigurado, cargarPedidos, cargarCostos, cargarProduccion, cargarGastos, cargarRetiros, usuarioActual?.rol])
+    cargarCajaHoy()
+  }, [supabaseConfigurado, cargarPedidos, cargarCostos, cargarProduccion, cargarGastos, cargarRetiros, cargarCajaHoy, usuarioActual?.rol])
 
   // ── Auto-Refresh al volver a la app (Background -> Foreground) ──
   useEffect(() => {
@@ -210,6 +226,7 @@ export default function App() {
       if (esAdmin) cargarProduccion()
       cargarGastos()
       cargarRetiros()
+      cargarCajaHoy()
     }
 
     const handleVisibilityChange = () => {
@@ -230,7 +247,7 @@ export default function App() {
       window.removeEventListener('pageshow', handlePageShow)
       window.removeEventListener('focus', handleVisibilityChange)
     }
-  }, [cargarPedidos, cargarProduccion, cargarGastos, cargarRetiros])
+  }, [cargarPedidos, cargarProduccion, cargarGastos, cargarRetiros, cargarCajaHoy])
 
   const forzarRecarga = () => {
     mostrarToast('🔄 Actualizando...')
@@ -238,6 +255,7 @@ export default function App() {
     cargarProduccion()
     cargarGastos()
     cargarRetiros()
+    cargarCajaHoy()
   }
 
   // ── Suscripción real-time ──
@@ -249,9 +267,20 @@ export default function App() {
       try {
         if (eventType === 'INSERT') {
           const pedido = await obtenerPedidoConDetalle(nuevo.id)
-          setPedidos(prev => [pedido, ...prev])
-          mostrarToast('🛒 Nuevo pedido recibido')
-          reproducirSonidoNotificacion()
+          // Deduplicar: si ya lo agregamos desde este dispositivo, solo actualiza
+          let eraNuevo = false
+          setPedidos(prev => {
+            if (prev.some(p => p.id === pedido.id)) {
+              return prev.map(p => p.id === pedido.id ? pedido : p)
+            }
+            eraNuevo = true
+            return [pedido, ...prev]
+          })
+          // Solo notificar si vino de otro dispositivo
+          if (eraNuevo) {
+            mostrarToast('🛒 Nuevo pedido recibido')
+            reproducirSonidoNotificacion()
+          }
         } else if (eventType === 'UPDATE') {
           const pedido = await obtenerPedidoConDetalle(nuevo.id)
           setPedidos(prev => prev.map(p => p.id === pedido.id ? pedido : p))
@@ -307,17 +336,18 @@ export default function App() {
 
       <main className="flex-1 w-full max-w-4xl mx-auto md:p-4">
         {tabActivo === 'dashboard' && (
-          <Dashboard 
-            pedidos={pedidos} 
-            produccion={produccion} 
-            gastos={gastos} 
+          <Dashboard
+            pedidos={pedidos}
+            produccion={produccion}
+            gastos={gastos}
             retiros={retiros}
+            cajaHoy={cajaHoy}
             onPedidosChange={setPedidos}
             onGastosChange={setGastos}
             onRetirosChange={setRetiros}
             usuarioActual={usuarioActual}
             cargando={cargando}
-            onRefresh={() => { cargarPedidos(); cargarProduccion(); cargarGastos(); cargarRetiros() }}
+            onRefresh={() => { cargarPedidos(); cargarProduccion(); cargarGastos(); cargarRetiros(); cargarCajaHoy() }}
             costos={costos}
             onIrACostos={() => setTabActivo('costos')}
             onIrAProduccion={() => setTabActivo('produccion')}
@@ -331,6 +361,16 @@ export default function App() {
               await cargarRetiros()
               mostrarToast('🗑️ Retiro eliminado')
             }}
+            onRegistrarGasto={async (data) => {
+              await registrarGasto(data)
+              await cargarGastos()
+              mostrarToast('📦 Gasto registrado')
+            }}
+            onEliminarGasto={async (id) => {
+              await eliminarGasto(id)
+              await cargarGastos()
+              mostrarToast('🗑️ Gasto eliminado')
+            }}
           />
         )}
 
@@ -341,39 +381,66 @@ export default function App() {
             cargando={cargando}
             onPedidosActualizar={setPedidos}
             usuarioActual={usuarioActual}
+            onIrADeudas={() => setTabActivo('deudas')}
           />
         )}
 
         {tabActivo === 'agregar' && (
           <AgregarPedido
-            onPedidoCreado={cargarPedidos}
+            pedidos={pedidos}
+            produccion={produccion}
+            onPedidoCreado={async (pedidoBasico) => {
+              try {
+                // Agregar con joins completos sin recargar toda la lista
+                const pedidoCompleto = await obtenerPedidoConDetalle(pedidoBasico.id)
+                setPedidos(prev => {
+                  if (prev.some(p => p.id === pedidoCompleto.id)) {
+                    // Si ya llegó por real-time, solo actualizamos por si acaso
+                    return prev.map(p => p.id === pedidoCompleto.id ? pedidoCompleto : p)
+                  }
+                  return [pedidoCompleto, ...prev]
+                })
+              } catch {
+                cargarPedidos() // fallback si falla el detalle
+              }
+            }}
             onIrAPedidos={() => setTabActivo('pedidos')}
             usuarioActual={usuarioActual}
           />
         )}
 
-        {tabActivo === 'produccion' && ['admin', 'superadmin'].includes(usuarioActual?.rol) && (
+        {tabActivo === 'produccion' && ['productor', 'superadmin'].includes(usuarioActual?.rol) && (
           <Produccion
             onProduccionRegistrada={() => {
               cargarProduccion()
-              cargarCostos()
+              if (usuarioActual?.rol === 'superadmin') cargarCostos()
             }}
           />
         )}
 
-        {tabActivo === 'deudas' && (
-          <Deudas />
+        {tabActivo === 'finanzas' && usuarioActual?.rol === 'superadmin' && (
+          <Finanzas
+            cajaFisica={cajaHoy.caja_efectivo_final}
+            usuarioActual={usuarioActual}
+          />
         )}
 
-        {tabActivo === 'historial' && ['admin', 'superadmin'].includes(usuarioActual?.rol) && (
+        {tabActivo === 'deudas' && (
+          <Deudas onRecargar={() => {
+            cargarCajaHoy()
+            cargarPedidos()
+          }} />
+        )}
+
+        {tabActivo === 'historial' && usuarioActual?.rol === 'superadmin' && (
           <HistorialCierres />
         )}
 
-        {tabActivo === 'auditoria' && usuarioActual?.rol === 'superadmin' && (
+        {tabActivo === 'auditoria' && ['productor', 'superadmin'].includes(usuarioActual?.rol) && (
           <Auditoria />
         )}
 
-        {tabActivo === 'costos' && ['admin', 'superadmin'].includes(usuarioActual?.rol) && (
+        {tabActivo === 'costos' && usuarioActual?.rol === 'superadmin' && (
           <div className="p-4 pb-0 max-w-lg mx-auto">
             <div className="flex gap-2 mb-4">
               {[

@@ -69,23 +69,27 @@ export default function HistorialCierres() {
                 </div>
 
                 {/* Detalles */}
-                <div className="p-4 bg-white grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 uppercase mb-1">
-                      <ArrowUpRight size={14} className="text-green-500" /> Ingresos
+                <div className="p-4 bg-white space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-green-50 rounded-xl px-3 py-2.5">
+                      <p className="text-xs font-bold text-green-600 uppercase tracking-wide mb-0.5">🛒 Ventas del día</p>
+                      <p className="font-extrabold text-gray-800">{formatearPesos(cierre.total_ingresos)}</p>
                     </div>
-                    <p className="font-bold text-gray-700">{formatearPesos(cierre.total_ingresos)}</p>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 uppercase mb-1">
-                      <ArrowDownRight size={14} className="text-red-500" /> Salidas
+                    {(cierre.total_cobros_deuda > 0) && (
+                      <div className="bg-blue-50 rounded-xl px-3 py-2.5">
+                        <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-0.5">💰 Cobros fiados</p>
+                        <p className="font-extrabold text-gray-800">{formatearPesos(cierre.total_cobros_deuda)}</p>
+                      </div>
+                    )}
+                    <div className="bg-red-50 rounded-xl px-3 py-2.5">
+                      <p className="text-xs font-bold text-red-500 uppercase tracking-wide mb-0.5">📦 Salidas</p>
+                      <p className="font-extrabold text-gray-800">{formatearPesos((cierre.total_gastos || 0) + (cierre.total_retiros || 0))}</p>
                     </div>
-                    <p className="font-bold text-gray-700">{formatearPesos(cierre.total_gastos + cierre.total_retiros)}</p>
                   </div>
-                  <div className="col-span-2 pt-3 border-t border-gray-100 flex items-center gap-2">
+                  <div className="pt-2 border-t border-gray-100 flex items-center gap-2">
                     <Package size={14} className="text-gray-400" />
                     <span className="text-sm text-gray-600 font-medium">
-                      {cierre.total_pedidos} pedidos realizados en el día
+                      {cierre.total_pedidos} pedidos en el día
                     </span>
                   </div>
                 </div>

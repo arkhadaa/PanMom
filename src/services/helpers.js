@@ -16,9 +16,28 @@ export function formatearPesos(monto) {
 
 export const LABELS_ESTADO = {
   pendiente:   'Pendiente',
-  produciendo: 'Produciendo',
+  produciendo: 'En proceso', // legacy, ya no se usa en flujo nuevo
   listo:       'Listo',
   entregado:   'Entregado',
+  anulado:     'Anulado',
+}
+
+/**
+ * Calcula cuánto se vendió de cada producto hoy.
+ * Usa los pedidos ya cargados en memoria (sin query extra).
+ */
+export function calcularDesgloseVentas(pedidos) {
+  const resumen = {}
+  for (const pedido of pedidos || []) {
+    if (pedido.estado === 'anulado') continue
+    for (const item of pedido.pedido_items || []) {
+      const nombre = item.productos?.nombre || 'Producto'
+      if (!resumen[nombre]) resumen[nombre] = { nombre, cantidad: 0, total: 0 }
+      resumen[nombre].cantidad += item.cantidad || 0
+      resumen[nombre].total   += (item.cantidad || 0) * (item.precio_unitario || 0)
+    }
+  }
+  return Object.values(resumen).sort((a, b) => b.cantidad - a.cantidad)
 }
 
 export function claseBadgeEstado(estado) {

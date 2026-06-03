@@ -1,6 +1,6 @@
 # 🍞 PanMom — Sistema de Gestión para Negocio Familiar
 
-PanMom es una aplicación web mobile-first desarrollada para digitalizar y organizar la operación diaria de un negocio familiar de pan y sopaipillas.
+PanMom es una aplicación web mobile-first desarrollada para digitalizar y organizar la operación diaria de un negocio familiar de pan.
 
 El proyecto nació a partir de un problema real: pedidos anotados manualmente, múltiples personas gestionando información al mismo tiempo, cálculos hechos mentalmente y poca visibilidad sobre ventas, producción y caja diaria.
 

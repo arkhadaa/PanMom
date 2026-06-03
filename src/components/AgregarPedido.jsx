@@ -5,35 +5,15 @@
 // =============================================
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Plus, Minus, User, ShoppingCart, DollarSign, FileText, CheckCircle, Loader2 } from 'lucide-react'
+import { Plus, Minus, User, ShoppingCart, DollarSign, FileText, CheckCircle, Loader2, Clock } from 'lucide-react'
+
 import { 
   crearPedido, listarProductos, formatearPesos, 
-  listarTodosClientes, listarClientesFrecuentes 
+  listarTodosClientes, listarClientesFrecuentes, calcularStockHoy
 } from '../services/supabaseClient'
 
-// ─── Toggle ───────────────────────────────────────────────────────────────────
-function Toggle({ value, onChange, labelOn, labelOff }) {
-  return (
-    <div
-      className="toggle-container"
-      onClick={() => onChange(!value)}
-      role="switch"
-      aria-checked={value}
-      tabIndex={0}
-      onKeyDown={e => e.key === ' ' && onChange(!value)}
-    >
-      <div className={`toggle-track ${value ? 'on' : 'off'}`}>
-        <div className={`toggle-thumb ${value ? 'on' : 'off'}`} />
-      </div>
-      <span className={`text-sm font-semibold ${value ? 'text-green-600' : 'text-gray-500'}`}>
-        {value ? labelOn : labelOff}
-      </span>
-    </div>
-  )
-}
-
 // ─── Tarjeta de producto (Grid) ───────────────────────────────────────────────
-function TarjetaProducto({ producto, cantidad, onChange, colorTheme }) {
+function TarjetaProducto({ producto, cantidad, onChange, colorTheme, stockDisponible, tieneReceta, hayProduccionHoy }) {
   const inc = () => onChange(cantidad + 1)
   const dec = () => onChange(Math.max(0, cantidad - 1))
   const subtotal = cantidad * producto.precio_venta
@@ -103,17 +83,33 @@ function TarjetaProducto({ producto, cantidad, onChange, colorTheme }) {
 }
 
 // ─── Formulario principal ─────────────────────────────────────────────────────
-export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioActual }) {
+export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioActual, produccion = [], pedidos = [] }) {
   const [productos, setProductos]   = useState([])
   const [cantidades, setCantidades] = useState({}) // { producto_id: cantidad }
   const [nombreCliente, setNombre]  = useState('')
-  const [pagado, setPagado]               = useState(false)
-  const [metodoPago, setMetodoPago]       = useState('efectivo')
+  // 'fiado' | 'efectivo' | 'transferencia' | 'mixto'
+  const [metodoPago, setMetodoPago] = useState('fiado')
+  const [montoEfectivo, setMontoEfectivo] = useState('')
+
+  const [horaEntrega, setHoraEntrega] = useState('')
   const [notas, setNotas]                 = useState('')
   const [guardando, setGuardando]   = useState(false)
   const [exito, setExito]           = useState(false)
   const [error, setError]           = useState(null)
   const [cargandoProd, setCargProd] = useState(true)
+
+  const stockHoy = useMemo(
+    () => calcularStockHoy(produccion, pedidos),
+    [produccion, pedidos]
+  )
+
+  const stockPorReceta = useMemo(() => {
+    const mapa = {}
+    stockHoy.forEach(s => { mapa[s.receta_id] = s.disponible })
+    return mapa
+  }, [stockHoy])
+
+  const hayProduccionHoy = produccion.length > 0
 
   // Estados para autocompletado y clientes frecuentes
   const [clientesTodos, setClientesTodos] = useState([])
@@ -181,20 +177,30 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
     setGuardando(true)
     setError(null)
     try {
-      await crearPedido({
-        nombreCliente: nombreCliente.trim(),
+      let fecha_entrega = null
+      if (horaEntrega) {
+        const hoy = new Date()
+        const [h, m] = horaEntrega.split(':')
+        hoy.setHours(Number(h), Number(m), 0, 0)
+        fecha_entrega = hoy.toISOString()
+      }
+
+      const pedidoCreado = await crearPedido({
+        nombreCliente:  nombreCliente.trim(),
         items,
-        pagado,
-        metodo_pago: pagado ? metodoPago : null,
-        notas: notas.trim() || null,
-        usuario: usuarioActual?.nombre || 'sistema',
+        metodoPago,
+        montoEfectivo: metodoPago === 'mixto' ? Number(montoEfectivo) : undefined,
+        fecha_entrega,
+        notas:          notas.trim() || null,
+        usuario:        usuarioActual?.nombre || 'sistema',
       })
       setExito(true)
       setNombre('')
       setCantidades({})
-      setPagado(false)
+      setMetodoPago('fiado')
+      setMontoEfectivo('')
       setNotas('')
-      onPedidoCreado?.()
+      onPedidoCreado?.(pedidoCreado)
       setTimeout(() => setExito(false), 2500)
     } catch (err) {
       console.error(err)
@@ -230,6 +236,40 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
 
       <form onSubmit={handleGuardar} className="space-y-4">
 
+        {!hayProduccionHoy && (
+          <div className="mb-4 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <span className="text-amber-500 text-lg flex-shrink-0">⚠️</span>
+            <div>
+              <p className="font-semibold text-amber-800 text-sm">
+                Sin cargas registradas hoy
+              </p>
+              <p className="text-xs text-amber-600">
+                Tu mamá aún no registró producción. 
+                Puedes igual tomar pedidos.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {hayProduccionHoy && stockHoy.length > 0 && (
+          <div className="mb-4 flex flex-col gap-2">
+            {stockHoy.map((s, index) => (
+              <div key={s.nombre || index} className={`flex items-center justify-between rounded-xl px-4 py-2.5 border shadow-sm ${
+                s.disponible <= 0 ? 'bg-orange-50 border-orange-200 text-orange-700' :
+                s.disponible <= 10 ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                'bg-gray-50 border-gray-200 text-gray-700'
+              }`}>
+                <span className="font-semibold text-sm flex items-center gap-1.5">
+                  {s.nombre.toLowerCase().includes('sopaipilla') ? '🥟' : '🥖'} Stock {s.nombre}
+                </span>
+                <span className="font-bold text-sm">
+                  {s.disponible <= 0 ? '⚠️ Agotado' : `${s.disponible} disponibles`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ── Productos ── */}
         <div>
           <div className="divider-text flex items-center gap-1.5 mb-3">
@@ -264,15 +304,24 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
                         {titulo}
                       </h3>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {items.map(p => (
-                          <TarjetaProducto
-                            key={p.id}
-                            producto={p}
-                            cantidad={cantidades[p.id] || 0}
-                            onChange={v => setCantidad(p.id, v)}
-                            colorTheme={colorTheme}
-                          />
-                        ))}
+                        {items.map(p => {
+                          const tieneReceta = !!(p.receta_id)
+                          const stockDisponible = tieneReceta 
+                            ? (stockPorReceta[p.receta_id] ?? null) 
+                            : null
+                          return (
+                            <TarjetaProducto
+                              key={p.id}
+                              producto={p}
+                              cantidad={cantidades[p.id] || 0}
+                              onChange={v => setCantidad(p.id, v)}
+                              colorTheme={colorTheme}
+                              stockDisponible={stockDisponible}
+                              tieneReceta={tieneReceta}
+                              hayProduccionHoy={hayProduccionHoy}
+                            />
+                          )
+                        })}
                       </div>
                     </div>
                   )
@@ -315,29 +364,43 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
           </label>
           
           {/* Chips de clientes frecuentes */}
-          {clientesFrecuentes.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {clientesFrecuentes.map(c => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => {
-                    setNombre(c.nombre)
-                    setMostrarSugerencias(false)
-                  }}
-                  className={`
-                    px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95
-                    ${nombreCliente === c.nombre
-                      ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-orange-300'
-                    }
-                  `}
-                >
-                  {c.nombre}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => {
+                setNombre('Público General')
+                setMostrarSugerencias(false)
+              }}
+              className={`
+                px-3 py-1.5 rounded-full text-xs font-bold border transition-all active:scale-95
+                ${nombreCliente === 'Público General'
+                  ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                  : 'bg-blue-50 text-blue-600 border-blue-200 hover:border-blue-300'
+                }
+              `}
+            >
+              👥 Público General
+            </button>
+            {clientesFrecuentes.filter(c => c.nombre !== 'Público General').map(c => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  setNombre(c.nombre)
+                  setMostrarSugerencias(false)
+                }}
+                className={`
+                  px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95
+                  ${nombreCliente === c.nombre
+                    ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-orange-300'
+                  }
+                `}
+              >
+                {c.nombre}
+              </button>
+            ))}
+          </div>
 
           {/* Input de texto con autocomplete */}
           <input
@@ -376,37 +439,110 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
         </div>
 
         {/* ── Pago ── */}
-        <div className="card !py-3 flex items-center justify-between">
-          <div>
-            <p className="font-semibold text-gray-700 text-sm">Estado de pago</p>
-            <p className="text-xs text-gray-400">¿El cliente ya pagó?</p>
+        <div>
+          <div className="divider-text mt-2 mb-3">Forma de pago</div>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { value: 'fiado',         label: '📒 Fiado',    activeClass: 'border-red-400 bg-red-50 text-red-700'      },
+              { value: 'efectivo',      label: '💵 Efectivo', activeClass: 'border-green-500 bg-green-50 text-green-700' },
+              { value: 'transferencia', label: '📱 Transf.',  activeClass: 'border-blue-500 bg-blue-50 text-blue-700'   },
+            ].map(({ value, label, activeClass }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => { setMetodoPago(value); setMontoEfectivo('') }}
+                className={`py-3 rounded-xl text-sm font-bold border-2 transition-all ${
+                  metodoPago === value ? activeClass : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        <div className="flex flex-col gap-2">
-          <Toggle value={pagado} onChange={setPagado} labelOn="✓ Pagó" labelOff="Debe" />
-          
-          {pagado && (
-            <div className="flex bg-gray-100 rounded-lg p-1 animate-fade-up">
-              <button
-                type="button"
-                onClick={() => setMetodoPago('efectivo')}
-                className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-colors ${
-                  metodoPago === 'efectivo' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                💵 Efectivo
-              </button>
-              <button
-                type="button"
-                onClick={() => setMetodoPago('transferencia')}
-                className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-colors ${
-                  metodoPago === 'transferencia' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                📱 Transf.
-              </button>
+
+          {/* Mixto: cuando pagan parte efectivo y parte transferencia */}
+          {metodoPago !== 'fiado' && (
+            <button
+              type="button"
+              onClick={() => setMetodoPago(metodoPago === 'mixto' ? 'efectivo' : 'mixto')}
+              className={`mt-2 w-full py-2 rounded-xl text-xs font-semibold border-2 transition-all ${
+                metodoPago === 'mixto'
+                  ? 'border-purple-400 bg-purple-50 text-purple-700'
+                  : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
+              }`}
+            >
+              🔀 Mixto (parte efectivo + parte transferencia)
+            </button>
+          )}
+
+          {metodoPago === 'mixto' && (
+            <div className="mt-2 bg-purple-50 rounded-xl px-3 py-2.5 space-y-2">
+              <p className="text-xs font-bold text-purple-600">Total: {formatearPesos(totalMonto)}</p>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-500 font-medium flex-shrink-0 w-20">💵 Efectivo</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={montoEfectivo}
+                  onChange={e => setMontoEfectivo(e.target.value)}
+                  placeholder="$0"
+                  min={0}
+                  max={totalMonto}
+                  className="input-field !py-1.5 text-sm flex-1"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-500 font-medium flex-shrink-0 w-20">📱 Transf.</label>
+                <p className="text-sm font-bold text-blue-600">
+                  {formatearPesos(Math.max(0, totalMonto - (Number(montoEfectivo) || 0)))}
+                </p>
+              </div>
             </div>
           )}
+
+          {metodoPago === 'fiado' && (
+            <p className="text-xs text-gray-400 mt-2 text-center">
+              Queda pendiente de cobro — aparecerá en <strong>Deudas</strong>
+            </p>
+          )}
         </div>
+
+        {/* ── Hora de Entrega ── */}
+        <div>
+          <label className="input-label">
+            <span className="flex items-center gap-1.5">
+              <Clock size={14} className="text-orange-500" />
+              Hora de entrega <span className="font-normal text-gray-400">(opcional)</span>
+            </span>
+          </label>
+          <input
+            type="time"
+            value={horaEntrega}
+            onChange={e => setHoraEntrega(e.target.value)}
+            className="input-field w-full"
+          />
+          <div className="flex flex-wrap gap-2 mt-2">
+            {[
+              { label: 'Ahora', value: '' },
+              { label: '13:00', value: '13:00' },
+              { label: '15:00', value: '15:00' },
+              { label: '17:30', value: '17:30' },
+              { label: '19:30', value: '19:30' }
+            ].map(btn => (
+              <button
+                key={btn.label}
+                type="button"
+                onClick={() => setHoraEntrega(btn.value)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${
+                  horaEntrega === btn.value
+                    ? 'bg-orange-500 text-white border-orange-500'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── Notas ── */}
@@ -420,7 +556,7 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
           <textarea
             value={notas}
             onChange={e => setNotas(e.target.value)}
-            placeholder="Ej: Sin sal, para las 15:00"
+            placeholder="Ej: Sin sal"
             className="input-field resize-none"
             rows={2}
             maxLength={300}
