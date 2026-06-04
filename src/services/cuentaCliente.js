@@ -12,12 +12,34 @@ import { supabase } from './supabase'
  */
 export async function obtenerDeudoresResumen() {
   const { data, error } = await supabase
-    .from('vista_deuda_clientes')
+    .from('vista_deuda_pedidos')
     .select('*')
-    .order('deuda_total', { ascending: false })
+    .gt('deuda_restante', 0)
+    .neq('estado', 'anulado')
 
   if (error) throw error
-  return data || []
+
+  // Agrupar y sumar manualmente para ignorar pedidos anulados
+  const resumenMap = {}
+  for (const row of (data || [])) {
+    if (!resumenMap[row.cliente_id]) {
+      resumenMap[row.cliente_id] = {
+        cliente_id: row.cliente_id,
+        cliente_nombre: row.cliente_nombre,
+        pedidos_con_deuda: 0,
+        total_vendido: 0,
+        total_pagado: 0,
+        deuda_total: 0
+      }
+    }
+    const r = resumenMap[row.cliente_id]
+    r.pedidos_con_deuda += 1
+    r.total_vendido += row.total_pedido
+    r.total_pagado += row.total_pagado
+    r.deuda_total += row.deuda_restante
+  }
+
+  return Object.values(resumenMap).sort((a, b) => b.deuda_total - a.deuda_total)
 }
 
 /**
@@ -29,6 +51,7 @@ export async function obtenerDeudaCliente(clienteId) {
     .select('*')
     .eq('cliente_id', clienteId)
     .gt('deuda_restante', 0)
+    .neq('estado', 'anulado')
     .order('fecha_pedido', { ascending: true })
 
   if (error) throw error
