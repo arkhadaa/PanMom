@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import { listarCuentasClientes, registrarPagoCliente, formatearPesos } from '../services/supabaseClient'
+import { obtenerLimitesDiaNegocio } from '../services/helpers'
 
 // ─── Tarjeta de cliente ───────────────────────────────────────────────────────
 function TarjetaCliente({ cliente, onPagoRegistrado }) {
@@ -184,7 +185,24 @@ export default function Deudas({ onRecargar }) {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [])
 
-  const totalGlobal = cuentas.reduce((s, c) => s + c.saldo, 0)
+  const { inicio } = obtenerLimitesDiaNegocio()
+  const inicioLocalMs = inicio.getTime()
+
+  let deudaHoy = 0
+  let deudaAtrasada = 0
+
+  cuentas.forEach(c => {
+    c.movimientos.forEach(m => {
+      const fechaMs = new Date(m.fecha).getTime()
+      if (fechaMs >= inicioLocalMs) {
+        deudaHoy += m.pendiente
+      } else {
+        deudaAtrasada += m.pendiente
+      }
+    })
+  })
+
+  const totalGlobal = deudaHoy + deudaAtrasada
 
   if (cargando) {
     return (
@@ -217,11 +235,19 @@ export default function Deudas({ onRecargar }) {
       {/* Total global */}
       {cuentas.length > 0 && (
         <div className="rounded-2xl p-4 shadow-md bg-gradient-to-br from-red-500 to-rose-600 text-white mb-4">
-          <p className="text-xs font-bold uppercase tracking-wider opacity-80 mb-1">Total por cobrar</p>
+          <p className="text-xs font-bold uppercase tracking-wider opacity-80 mb-1">Deuda Total Acumulada</p>
           <p className="text-4xl font-extrabold">{formatearPesos(totalGlobal)}</p>
-          <p className="text-sm opacity-90 mt-1">
-            {cuentas.length} cliente{cuentas.length !== 1 ? 's' : ''}
-          </p>
+          
+          <div className="mt-4 pt-3 border-t border-white/20 flex justify-between items-center text-sm">
+            <div>
+              <p className="opacity-80">Deuda de hoy</p>
+              <p className="font-bold">{formatearPesos(deudaHoy)}</p>
+            </div>
+            <div className="text-right">
+              <p className="opacity-80">Días anteriores</p>
+              <p className="font-bold">{formatearPesos(deudaAtrasada)}</p>
+            </div>
+          </div>
         </div>
       )}
 
