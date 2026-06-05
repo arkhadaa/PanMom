@@ -449,7 +449,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
 
       {/* ── Buscador y Filtro de Fecha ── */}
       <div className="flex gap-2 mb-3">
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="search"
@@ -459,14 +459,26 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
             className="input-field !pl-9 !py-2.5 w-full"
           />
         </div>
-        <input 
-          type="date"
-          value={fechaFiltro}
-          onChange={e => setFechaFiltro(e.target.value)}
-          max={new Date().toISOString().split('T')[0]} // no permitir fechas futuras
-          className="input-field !py-2.5 !px-3 text-sm text-gray-600 bg-white w-auto"
-          title="Ver historial de otro día"
-        />
+        
+        <div className="relative flex-shrink-0 flex items-center">
+          <input 
+            type="date"
+            value={fechaFiltro}
+            onChange={e => setFechaFiltro(e.target.value)}
+            max={new Date().toISOString().split('T')[0]}
+            className={`input-field !py-2.5 !pl-3 ${fechaFiltro ? '!pr-8' : '!pr-3'} text-sm text-gray-800 bg-white h-full min-h-[42px] max-w-[140px] md:max-w-none`}
+            style={{ color: '#292524' }} // Force color for iOS Safari bug
+          />
+          {fechaFiltro && (
+            <button 
+              onClick={() => setFechaFiltro('')}
+              className="absolute right-2 text-gray-400 hover:text-red-500 bg-white rounded-full p-0.5"
+              title="Volver a los pedidos de hoy"
+            >
+              <XCircle size={16} className="fill-white" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Filtros de estado ── */}
