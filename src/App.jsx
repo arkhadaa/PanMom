@@ -34,6 +34,7 @@ import {
   obtenerSesionLocal,
   guardarSesionLocal,
   obtenerPedidoConDetalle,
+  registrarApertura,
 } from './services/supabaseClient'
 
 // ─── Toast de notificación ────────────────────────────────────────────────────
@@ -370,6 +371,11 @@ export default function App() {
               await eliminarGasto(id)
               await cargarGastos()
               mostrarToast('🗑️ Gasto eliminado')
+            }}
+            onRegistrarApertura={async (monto) => {
+              await registrarApertura(monto, usuarioActual?.nombre)
+              await cargarCajaHoy()
+              mostrarToast('🏦 Caja abierta')
             }}
           />
         )}

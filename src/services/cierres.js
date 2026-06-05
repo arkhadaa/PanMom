@@ -15,22 +15,32 @@ export async function obtenerCajaHoy() {
   const { inicio, fin } = obtenerLimitesDiaNegocio()
   const isoInicio = inicio.toISOString()
   const isoFin = fin.toISOString()
+  
+  // Extraemos la fecha local (YYYY-MM-DD) usando un offset simple o el formato del string.
+  // Como `inicio` ya es la fecha de inicio del negocio local (ej. 4 AM), 
+  // su getFullYear, getMonth, getDate corresponden a la fecha correcta.
+  const fechaLocalStr = `${inicio.getFullYear()}-${String(inicio.getMonth() + 1).padStart(2, '0')}-${String(inicio.getDate()).padStart(2, '0')}`
 
   try {
-    const [pagosRes, gastosRes, retirosRes] = await Promise.all([
+    const [pagosRes, gastosRes, retirosRes, aperturaRes] = await Promise.all([
       supabase.from('pagos_cliente').select('monto_efectivo, monto_transferencia').gte('fecha', isoInicio).lte('fecha', isoFin),
       supabase.from('gastos').select('monto').gte('fecha_gasto', isoInicio).lte('fecha_gasto', isoFin),
-      supabase.from('retiros').select('monto').gte('fecha', isoInicio).lte('fecha', isoFin)
+      supabase.from('retiros').select('monto').gte('fecha', isoInicio).lte('fecha', isoFin),
+      supabase.from('aperturas_caja').select('monto').eq('fecha', fechaLocalStr).maybeSingle()
     ])
 
     const ingresos_efectivo = (pagosRes.data || []).reduce((s, p) => s + (p.monto_efectivo || 0), 0)
     const ingresos_transferencia = (pagosRes.data || []).reduce((s, p) => s + (p.monto_transferencia || 0), 0)
     const total_gastos = (gastosRes.data || []).reduce((s, g) => s + (g.monto || 0), 0)
     const total_retiros = (retirosRes.data || []).reduce((s, r) => s + (r.monto || 0), 0)
+    const monto_apertura = aperturaRes.data?.monto || 0
+    const apertura_registrada = !!aperturaRes.data
 
-    const caja_efectivo_final = ingresos_efectivo - total_gastos - total_retiros
+    const caja_efectivo_final = monto_apertura + ingresos_efectivo - total_gastos - total_retiros
 
     return {
+      monto_apertura,
+      apertura_registrada,
       ingresos_efectivo,
       ingresos_transferencia,
       total_gastos,
@@ -39,8 +49,24 @@ export async function obtenerCajaHoy() {
     }
   } catch (err) {
     console.error("Error obteniendo caja hoy:", err)
-    return { ingresos_efectivo: 0, ingresos_transferencia: 0, total_gastos: 0, total_retiros: 0, caja_efectivo_final: 0 }
+    return { monto_apertura: 0, apertura_registrada: false, ingresos_efectivo: 0, ingresos_transferencia: 0, total_gastos: 0, total_retiros: 0, caja_efectivo_final: 0 }
   }
+}
+
+/**
+ * Registra o actualiza la apertura de caja para el día de hoy.
+ */
+export async function registrarApertura(monto, usuario = 'sistema') {
+  const { inicio } = obtenerLimitesDiaNegocio()
+  const fechaLocalStr = `${inicio.getFullYear()}-${String(inicio.getMonth() + 1).padStart(2, '0')}-${String(inicio.getDate()).padStart(2, '0')}`
+
+  const { data, error } = await supabase
+    .from('aperturas_caja')
+    .upsert([{ fecha: fechaLocalStr, monto, usuario }])
+    .select()
+
+  if (error) throw error
+  return data
 }
 
 export async function registrarCierreCaja(datos) {

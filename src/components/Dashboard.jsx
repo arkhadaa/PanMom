@@ -29,6 +29,53 @@ function StatCard({ icon: Icon, label, value, sublabel, bgClass, textClass, icon
   )
 }
 
+// ─── Formulario Apertura Caja ──────────────────────────────────────────────
+function FormApertura({ onRegistrar }) {
+  const [monto, setMonto] = useState('')
+  const [cargando, setCarg] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const v = Number(monto)
+    if (monto === '' || v < 0 || cargando) return
+    setCarg(true)
+    try {
+      await onRegistrar(v)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setCarg(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="px-4 py-3 bg-blue-50 border-b border-gray-100">
+      <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+        <Wallet size={12} className="text-blue-500" />
+        Apertura de caja
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="number"
+          value={monto}
+          onChange={e => setMonto(e.target.value)}
+          placeholder="Monto inicial $"
+          min={0}
+          className="input-field !py-2 text-sm flex-1 min-w-0 bg-white"
+        />
+        <button
+          type="submit"
+          disabled={monto === '' || cargando}
+          className="btn-primary !py-2 !px-4 text-sm flex-shrink-0 !bg-blue-600 hover:!bg-blue-700 shadow-none border-none"
+          style={{ background: '#2563eb' }}
+        >
+          {cargando ? <Loader2 size={14} className="animate-spin" /> : 'Abrir Caja'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 // ─── Formulario rápido de retiro ──────────────────────────────────────────────
 function FormRetiro({ onRegistrar }) {
   const [monto, setMonto] = useState('')
@@ -200,6 +247,7 @@ export default function Dashboard({
   onIrACostos, onIrAProduccion, onRegistrarRetiro, onEliminarRetiro,
   onRegistrarGasto, onEliminarGasto,
   usuarioActual,
+  onRegistrarApertura,
 }) {
   const [cerrandoCaja, setCerrandoCaja] = useState(false)
 
@@ -533,12 +581,16 @@ export default function Dashboard({
         </h3>
 
         <div className="card !p-0 overflow-hidden mb-3">
+          {usuarioActual?.rol === 'superadmin' && !cajaHoy.apertura_registrada && onRegistrarApertura && (
+            <FormApertura onRegistrar={onRegistrarApertura} />
+          )}
           {[
+            { label: '📥 Apertura de Caja',       value: cajaHoy.monto_apertura,             positivo: true, alwaysShow: cajaHoy.apertura_registrada },
             { label: '💵 Ingresos Efectivo',      value: cajaHoy.ingresos_efectivo,          positivo: true  },
             { label: '📱 Ingresos Transferencia', value: cajaHoy.ingresos_transferencia,     positivo: true  },
             { label: '📦 Gastos',                 value: cajaHoy.total_gastos,              positivo: false },
             { label: '💸 Retiros',                value: cajaHoy.total_retiros,             positivo: false },
-          ].filter(({ value, positivo }) => !positivo || value > 0)
+          ].filter(({ value, positivo, alwaysShow }) => alwaysShow || !positivo || value > 0)
            .map(({ label, value, positivo }) => (
             <div key={label} className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-0">
               <span className="text-sm text-gray-600">{label}</span>
