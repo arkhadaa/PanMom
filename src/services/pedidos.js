@@ -176,6 +176,31 @@ export async function listarPedidosHoy() {
   return data2 || []
 }
 
+/** Lista los pedidos de una fecha histórica. */
+export async function listarPedidosPorFecha(fechaStr) {
+  const { inicio, fin } = obtenerLimitesDiaNegocio(fechaStr)
+
+  const { data, error } = await supabase
+    .from('pedidos')
+    .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, producto_id, cantidad, precio_unitario, productos ( id, nombre, precio_venta, receta_id, cantidad_panes ) ), pagos_cliente ( monto_efectivo, monto_transferencia )')
+    .gte('fecha_pedido', inicio.toISOString())
+    .lte('fecha_pedido', fin.toISOString())
+    .order('fecha_pedido', { ascending: false })
+
+  if (!error) return data || []
+
+  console.warn('listarPedidosPorFecha fallback:', error.message)
+  const { data: data2, error: error2 } = await supabase
+    .from('pedidos')
+    .select('*, clientes ( id, nombre, telefono )')
+    .gte('fecha_pedido', inicio.toISOString())
+    .lte('fecha_pedido', fin.toISOString())
+    .order('fecha_pedido', { ascending: false })
+
+  if (error2) throw error2
+  return data2 || []
+}
+
 /** Avanza el estado de un pedido. */
 export async function actualizarEstado(pedidoId, nuevoEstado, usuario = 'sistema') {
   const { data, error } = await supabase

@@ -123,10 +123,17 @@ export function formatearCostoInsumo(insumo) {
  * Un día empieza a las 04:00 AM y termina a las 03:59 AM del día siguiente.
  * Evita que el sistema resetee a cero a medianoche si aún están trabajando.
  */
-export function obtenerLimitesDiaNegocio() {
-  const ahora = new Date()
-  // Si estamos antes de las 4 AM, consideramos que seguimos en el día "ayer"
-  if (ahora.getHours() < 4) {
+export function obtenerLimitesDiaNegocio(fechaOpcional = null) {
+  let ahora = new Date()
+  
+  if (fechaOpcional) {
+    // Si pasamos fecha específica (ej: '2026-06-03'), usamos el mediodía local de esa fecha 
+    // para evitar problemas de desfase horario.
+    ahora = new Date(fechaOpcional + 'T12:00:00')
+  }
+
+  // Si no se pasó fecha específica y estamos antes de las 4 AM, consideramos que seguimos en el día "ayer"
+  if (!fechaOpcional && ahora.getHours() < 4) {
     ahora.setDate(ahora.getDate() - 1)
   }
   

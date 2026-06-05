@@ -30,6 +30,7 @@ import {
   claseBadgeEstado,
   LABELS_ESTADO,
 } from '../services/supabaseClient'
+import { listarPedidosPorFecha } from '../services/pedidos'
 import EditarPedido from './EditarPedido'
 
 // ─── Timer Dinámico ───────────────────────────────────────────────────────────
@@ -111,7 +112,7 @@ function ConfirmarEliminar({ pedido, onConfirmar, onCancelar, esAdmin }) {
 }
 
 // ─── Tarjeta individual de pedido ─────────────────────────────────────────────
-function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, usuarioActual, onIrADeudas }) {
+function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, usuarioActual, onIrADeudas, esHistorial }) {
   const [expandido, setExpandido] = useState(false)
   const [cargandoAccion, setCargandoAccion] = useState(null) // 'estado'
 
@@ -137,6 +138,8 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
     listo:     { label: 'Marcar listo',     icon: PackageCheck, clase: 'btn-success' },
     entregado: { label: 'Marcar entregado', icon: PackageCheck, clase: 'btn-success' },
   }[sigEstado] || null
+
+  const puedeEditar = esAdmin || (!pedido.estado.includes('entregado') && !pedido.estado.includes('anulado'))
 
   const handleCambiarEstado = async () => {
     if (!sigEstado || cargandoAccion) return
@@ -264,43 +267,44 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
         )}
       </div>
 
-      {/* ── Botones de acción rápida ── */}
-      <div className="flex flex-wrap gap-2">
-        {/* Avanzar estado */}
-        {accionEstado && (
+      {/* ── Acciones (ocultas en historial) ── */}
+      {!esHistorial && (
+        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
+          {accionEstado && (
+            <button
+              onClick={handleCambiarEstado}
+              disabled={cargandoAccion === 'estado'}
+              className={`flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-1.5 transition-colors shadow-sm ${accionEstado.clase} disabled:opacity-50`}
+            >
+              {cargandoAccion === 'estado' ? <Loader2 size={15} className="animate-spin" /> : <accionEstado.icon size={15} />}
+              {accionEstado.label}
+            </button>
+          )}
+
+          {puedeEditar && (
+            <button
+              onClick={() => onEditar(pedido)}
+              className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-sm flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Pencil size={13} />
+              Editar
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Botón de anular/eliminar (solo superadmin o si no está listo/entregado, oculto en historial) */}
+      {!esHistorial && (puedeEditar || esAdmin) && (
+        <div className="mt-2 text-right">
           <button
-            onClick={handleCambiarEstado}
-            disabled={!!cargandoAccion}
-            className={`${accionEstado.clase}`}
+            onClick={() => onEliminar(pedido)}
+            className="text-[10px] text-gray-400 hover:text-red-500 uppercase tracking-wider font-bold transition-colors flex items-center gap-1 ml-auto"
           >
-            {cargandoAccion === 'estado'
-              ? <Loader2 size={13} className="animate-spin" />
-              : <accionEstado.icon size={13} />
-            }
-            {accionEstado.label}
+            <Trash2 size={13} />
+            {esAdmin ? 'Anular' : 'Eliminar'}
           </button>
-        )}
-
-        {/* Editar */}
-        <button
-          onClick={() => onEditar(pedido)}
-          className="btn-orange"
-          disabled={!!cargandoAccion}
-        >
-          <Pencil size={13} />
-          Editar
-        </button>
-
-        {/* Anular/Eliminar */}
-        <button
-          onClick={() => onEliminar(pedido)}
-          className="btn-danger bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 text-xs transition-colors"
-          disabled={!!cargandoAccion}
-        >
-          <Trash2 size={13} />
-          {esAdmin ? 'Anular' : 'Eliminar'}
-        </button>
-      </div>
+        </div>
+      )}
 
       {/* ── Sección Notas Permanentes ── */}
       {pedido.notas && (
@@ -329,13 +333,42 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [pedidoEditar, setPedidoEditar] = useState(null)
   const [pedidoEliminar, setPedidoEliminar] = useState(null)
+  const [fechaFiltro, setFechaFiltro] = useState('')
+  const [pedidosHistoricos, setPedidosHistoricos] = useState([])
+  const [cargandoHistorico, setCargandoHistorico] = useState(false)
   
   const esAdmin = usuarioActual?.rol === 'superadmin'
   const filtrosActivos = esAdmin ? FILTROS : FILTROS.filter(f => f.value !== 'anulado')
 
+  // ── Cargar historial ──
+  useEffect(() => {
+    if (!fechaFiltro) {
+      setPedidosHistoricos([])
+      return
+    }
+    let isActive = true
+    const fetchHistorico = async () => {
+      setCargandoHistorico(true)
+      try {
+        const data = await listarPedidosPorFecha(fechaFiltro)
+        if (isActive) setPedidosHistoricos(data)
+      } catch (err) {
+        console.error('Error fetching historial:', err)
+      } finally {
+        if (isActive) setCargandoHistorico(false)
+      }
+    }
+    fetchHistorico()
+    return () => { isActive = false }
+  }, [fechaFiltro])
+
+  const pedidosActivos = fechaFiltro ? pedidosHistoricos : pedidos
+  const esHistorial = !!fechaFiltro
+  const isLoading = esHistorial ? cargandoHistorico : cargando
+
   // ── Filtrar y buscar pedidos ──
   const pedidosFiltrados = useMemo(() => {
-    let lista = pedidos || []
+    let lista = pedidosActivos || []
 
     // Si no es admin, ocultar los anulados globalmente
     if (!esAdmin) {
@@ -358,7 +391,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
     }
 
     return lista
-  }, [pedidos, filtroEstado, busqueda])
+  }, [pedidosActivos, filtroEstado, busqueda, esAdmin])
 
   // ── Actualizar un pedido en la lista (preserva pedido_items si el nuevo no los trae) ──
   const handleActualizar = (pedidoActualizado) => {
@@ -396,12 +429,14 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
       {/* ── Título y Botón Actualizar ── */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-800">Pedidos de Hoy</h2>
+          <h2 className="text-xl font-bold text-gray-800">
+            {esHistorial ? 'Historial de Pedidos' : 'Pedidos de Hoy'}
+          </h2>
           <p className="text-sm text-gray-500">
-            {(pedidos || []).filter(p => p.estado !== 'anulado').length} pedido(s) válido(s) hoy
+            {(pedidosActivos || []).filter(p => p.estado !== 'anulado').length} pedido(s) válido(s) {esHistorial ? 'en fecha' : 'hoy'}
           </p>
         </div>
-        {onActualizar && (
+        {onActualizar && !esHistorial && (
           <button
             onClick={onActualizar}
             className="flex items-center gap-1.5 bg-orange-100 text-orange-600 hover:bg-orange-200 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors shadow-sm"
@@ -412,15 +447,25 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
         )}
       </div>
 
-      {/* ── Buscador ── */}
-      <div className="relative mb-3">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="search"
-          value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
-          placeholder="Buscar cliente..."
-          className="input-field !pl-9 !py-2.5"
+      {/* ── Buscador y Filtro de Fecha ── */}
+      <div className="flex gap-2 mb-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="search"
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            placeholder="Buscar cliente..."
+            className="input-field !pl-9 !py-2.5 w-full"
+          />
+        </div>
+        <input 
+          type="date"
+          value={fechaFiltro}
+          onChange={e => setFechaFiltro(e.target.value)}
+          max={new Date().toISOString().split('T')[0]} // no permitir fechas futuras
+          className="input-field !py-2.5 !px-3 text-sm text-gray-600 bg-white w-auto"
+          title="Ver historial de otro día"
         />
       </div>
 
@@ -441,7 +486,9 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
             {f.label}
             {f.value !== 'todos' && (
               <span className={`ml-1 ${filtroEstado === f.value ? 'text-white/80' : 'text-gray-400'}`}>
-                ({(pedidos || []).filter(p => p.estado === f.value).length})
+                {(pedidosActivos || []).filter(p => p.estado === f.value).length > 0 
+                  ? `(${(pedidosActivos || []).filter(p => p.estado === f.value).length})`
+                  : ''}
               </span>
             )}
           </button>
@@ -449,7 +496,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
       </div>
 
       {/* ── Skeleton loading ── */}
-      {cargando && (
+      {isLoading && (
         <div className="space-y-3">
           {[1,2,3].map(i => (
             <div key={i} className="skeleton h-32 w-full rounded-xl" />
@@ -457,8 +504,16 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
         </div>
       )}
 
+      {/* ── Aviso de Historial ── */}
+      {esHistorial && !isLoading && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2 text-blue-700">
+          <Clock size={18} className="flex-shrink-0" />
+          <p className="text-sm font-medium">Estás viendo el historial (modo lectura). Para editar, debes volver al día de Hoy borrando la fecha.</p>
+        </div>
+      )}
+
       {/* ── Sin pedidos ── */}
-      {!cargando && pedidosFiltrados.length === 0 && (
+      {!isLoading && pedidosFiltrados.length === 0 && (
         <div className="card text-center py-12">
           <div className="text-5xl mb-3">📋</div>
           <h3 className="font-bold text-gray-700 mb-1">
@@ -479,7 +534,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
       )}
 
       {/* ── Lista de pedidos ── */}
-      {!cargando && pedidosFiltrados.length > 0 && (
+      {!isLoading && pedidosFiltrados.length > 0 && (
         <div className="space-y-3">
           {pedidosFiltrados.map(pedido => (
             <TarjetaPedido
@@ -491,6 +546,7 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
               esAdmin={esAdmin}
               usuarioActual={usuarioActual}
               onIrADeudas={onIrADeudas}
+              esHistorial={esHistorial}
             />
           ))}
         </div>
