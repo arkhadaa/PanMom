@@ -106,29 +106,44 @@ export async function registrarPagoDeuda({ cliente_id, monto_total, metodo_pago 
 // Mantener estas funciones viejas como aliases si hay partes del código que aún no migran,
 // o simplemente actualizaremos Deudas.jsx para que use las nuevas.
 export const listarCuentasClientes = async () => {
-  // Construir objeto similar a lo antiguo si hiciera falta, pero mejor actualizamos Deudas.jsx
-  const resumen = await obtenerDeudoresResumen()
-  
-  // Para no romper la UI antes de que cambie, armamos algo parecido
-  const resultado = []
-  for (const r of resumen) {
-    const pedidos = await obtenerDeudaCliente(r.cliente_id)
-    resultado.push({
-      id: r.cliente_id,
-      nombre: r.cliente_nombre,
-      saldo: r.deuda_total,
-      movimientos: pedidos.map(p => ({
-        id: p.pedido_id,
-        tipo: 'cargo',
-        monto_total: p.total_pedido,
-        monto_abonado: p.total_pagado,
-        pendiente: p.deuda_restante,
-        fecha: p.fecha_pedido,
-        descripcion: p.notas || 'Pedido'
-      }))
+  const { data, error } = await supabase
+    .from('vista_deuda_pedidos')
+    .select('*')
+    .gt('deuda_restante', 0)
+    .neq('estado', 'anulado')
+    .order('fecha_pedido', { ascending: true })
+
+  if (error) {
+    console.error('Error al listar cuentas de clientes:', error)
+    return []
+  }
+
+  const clientesMap = {}
+
+  for (const row of (data || [])) {
+    if (!clientesMap[row.cliente_id]) {
+      clientesMap[row.cliente_id] = {
+        id: row.cliente_id,
+        nombre: row.cliente_nombre,
+        saldo: 0,
+        movimientos: []
+      }
+    }
+    
+    const c = clientesMap[row.cliente_id]
+    c.saldo += row.deuda_restante
+    c.movimientos.push({
+      id: row.pedido_id,
+      tipo: 'cargo',
+      monto_total: row.total_pedido,
+      monto_abonado: row.total_pagado,
+      pendiente: row.deuda_restante,
+      fecha: row.fecha_pedido,
+      descripcion: row.notas || 'Pedido'
     })
   }
-  return resultado
+
+  return Object.values(clientesMap).sort((a, b) => b.saldo - a.saldo)
 }
 
 export const registrarPagoCliente = async ({ clienteId, monto, metodo_pago, usuario }) => {

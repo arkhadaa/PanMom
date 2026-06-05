@@ -230,8 +230,8 @@ export async function editarPedido(pedidoId, { nombreCliente, items = [], notas,
     if (errItems) console.warn('pedido_items edit:', errItems.message)
   }
 
-  await registrarHistorial(pedidoId, alerta ? 'Edición sospechosa' : 'Pedido editado', usuario)
-  return { ...data, pedido_items: items }
+  await registrarHistorial(pedidoId, 'Pedido editado', usuario)
+  return obtenerPedidoConDetalle(pedidoId)
 }
 
 /** Anula un pedido (Soft delete). No se borra para auditoría. */
