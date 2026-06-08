@@ -107,32 +107,24 @@ export default function Header({ tabActivo, setTabActivo, conectado, usuarioActu
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <SyncBadge />
 
-            {conectado ? (
-              <div className="flex items-center gap-1 bg-white/15 rounded-full px-2.5 py-1">
-                <Wifi size={12} className="text-green-300" />
-                <span className="text-xs text-white/90 font-medium">Online</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 bg-red-500/30 rounded-full px-2.5 py-1">
-                <WifiOff size={12} className="text-red-200" />
-                <span className="text-xs text-white/90 font-medium">Offline</span>
+            {/* Solo mostramos el Wifi si no hay conexión y la cola está vacía, para no saturar si ya dice 'Sincronizado' */}
+            {!conectado && (
+              <div className="flex items-center bg-red-500/30 rounded-full px-1.5 py-1" title="Sin conexión">
+                <WifiOff size={14} className="text-red-200" />
               </div>
             )}
 
             {usuarioActual && (
-              <div className="flex items-center gap-2 ml-2 pl-2 border-l border-white/20">
-                <span className="text-xs font-medium text-white/90 hidden sm:inline-block">
-                  Hola, <b>{usuarioActual.nombre}</b>
-                </span>
-                <span className="text-xs font-medium text-white/90 sm:hidden">
+              <div className="flex items-center gap-2 ml-1 pl-1 sm:ml-2 sm:pl-2 border-l border-white/20">
+                <span className="text-xs font-medium text-white/90 hidden sm:inline-block truncate max-w-[100px]">
                   <b>{usuarioActual.nombre}</b>
                 </span>
                 <button
                   onClick={onLogout}
-                  className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-2.5 py-1 rounded-full transition-colors"
+                  className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors flex-shrink-0"
                   title="Cerrar sesión"
                 >
                   Salir

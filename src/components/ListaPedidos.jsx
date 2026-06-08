@@ -488,7 +488,11 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
       </div>
 
       {/* ── Filtros de estado ── */}
-      <div className="flex gap-2 overflow-x-auto pb-1 mb-4 scrollbar-none">
+      <div 
+        className="flex gap-2 overflow-x-auto pb-1 mb-4 scrollbar-none"
+        onTouchStart={e => e.stopPropagation()}
+        onTouchEnd={e => e.stopPropagation()}
+      >
         {filtrosActivos.map(f => (
           <button
             key={f.value}

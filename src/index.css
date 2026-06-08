@@ -55,6 +55,7 @@
     font-size: 16px;
     -webkit-tap-highlight-color: transparent;
     scroll-behavior: smooth;
+    overscroll-behavior-x: none;
   }
 
   body {
@@ -62,6 +63,7 @@
     color: var(--color-gray-800);
     min-height: 100vh;
     overflow-x: hidden;
+    overscroll-behavior-x: none;
     -webkit-font-smoothing: antialiased;
   }
 
