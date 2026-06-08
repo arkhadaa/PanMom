@@ -382,7 +382,7 @@ export default function App() {
 
   return (
     <div 
-      className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800 pb-20 md:pb-0"
+      className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800 pb-20 md:pb-0 overflow-x-hidden"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
@@ -394,7 +394,7 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      <main key={tabActivo} className={`flex-1 w-full max-w-4xl mx-auto md:p-4 ${animacionSlide}`}>
+      <main key={tabActivo} className={`flex-1 w-full max-w-4xl mx-auto md:p-4 overflow-x-hidden ${animacionSlide}`}>
         {tabActivo === 'dashboard' && (
           <Dashboard
             pedidos={pedidos}

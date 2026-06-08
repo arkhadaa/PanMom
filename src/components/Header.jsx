@@ -119,7 +119,7 @@ export default function Header({ tabActivo, setTabActivo, conectado, usuarioActu
 
             {usuarioActual && (
               <div className="flex items-center gap-2 ml-1 pl-1 sm:ml-2 sm:pl-2 border-l border-white/20">
-                <span className="text-xs font-medium text-white/90 hidden sm:inline-block truncate max-w-[100px]">
+                <span className="text-xs font-medium text-white/90 inline-block truncate max-w-[65px] sm:max-w-[100px]">
                   <b>{usuarioActual.nombre}</b>
                 </span>
                 <button
