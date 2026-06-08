@@ -330,7 +330,6 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
                               stockDisponible={stockDisponible}
                               tieneReceta={tieneReceta}
                               hayProduccionHoy={hayProduccionHoy}
-                              autoFocus={isFirstSection && index === 0}
                             />
                           )
                         })}

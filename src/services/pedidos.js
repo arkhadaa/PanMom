@@ -6,6 +6,7 @@
 
 import { supabase } from './supabase'
 import { obtenerLimitesDiaNegocio } from './helpers'
+import { fetchWithCache } from './helpers'
 
 export const PUBLICO_GENERAL_ID = 7;
 
@@ -40,35 +41,36 @@ export async function obtenerOCrearCliente(nombre, telefono = null) {
 
 /** Lista todos los clientes ordenados por nombre alfabéticamente. */
 export async function listarTodosClientes() {
-  const { data, error } = await supabase
+  const fetchPromise = supabase
     .from('clientes')
     .select('id, nombre')
     .order('nombre')
-
-  if (error) return []
-  return data || []
+    .then(({ data, error }) => {
+      if (error) return [];
+      return data || [];
+    });
+  return fetchWithCache('cache_clientes', fetchPromise);
 }
 
 /** Extrae los clientes únicos de los últimos pedidos (más frecuentes/recientes). */
 export async function listarClientesFrecuentes(limite = 5) {
-  const { data, error } = await supabase
+  const fetchPromise = supabase
     .from('pedidos')
     .select('clientes ( id, nombre )')
     .order('fecha_pedido', { ascending: false })
     .limit(50)
+    .then(({ data, error }) => {
+      if (error) return [];
+      const uniques = new Map();
+      (data || []).forEach(p => {
+        if (p.clientes && !uniques.has(p.clientes.id) && p.clientes.id !== PUBLICO_GENERAL_ID) {
+          uniques.set(p.clientes.id, p.clientes);
+        }
+      });
+      return Array.from(uniques.values()).slice(0, limite);
+    });
 
-  if (error) return []
-
-  const unicos = []
-  const ids = new Set()
-  for (const row of (data || [])) {
-    if (row.clientes && !ids.has(row.clientes.id) && row.clientes.id !== PUBLICO_GENERAL_ID) {
-      ids.add(row.clientes.id)
-      unicos.push(row.clientes)
-      if (unicos.length >= limite) break
-    }
-  }
-  return unicos
+  return fetchWithCache('cache_clientes_frecuentes', fetchPromise);
 }
 
 // ──────────────────────────────────────────
@@ -155,25 +157,26 @@ export async function crearPedido({ nombreCliente, items = [], metodoPago = 'fia
 export async function listarPedidosHoy() {
   const { inicio, fin } = obtenerLimitesDiaNegocio()
 
-  const { data, error } = await supabase
+  const fetchPromise = supabase
     .from('pedidos')
     .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, producto_id, cantidad, precio_unitario, productos ( id, nombre, precio_venta, receta_id, cantidad_panes, recetas ( nombre ) ) ), pagos_cliente ( monto_efectivo, monto_transferencia )')
     .gte('fecha_pedido', inicio.toISOString())
     .lte('fecha_pedido', fin.toISOString())
     .order('fecha_pedido', { ascending: false })
+    .then(async ({ data, error }) => {
+      if (!error) return data || []
+      console.warn('listarPedidosHoy fallback:', error.message)
+      const { data: data2, error: error2 } = await supabase
+        .from('pedidos')
+        .select('*, clientes ( id, nombre, telefono )')
+        .gte('fecha_pedido', inicio.toISOString())
+        .lte('fecha_pedido', fin.toISOString())
+        .order('fecha_pedido', { ascending: false })
+      if (error2) throw error2
+      return data2 || []
+    })
 
-  if (!error) return data || []
-
-  console.warn('listarPedidosHoy fallback:', error.message)
-  const { data: data2, error: error2 } = await supabase
-    .from('pedidos')
-    .select('*, clientes ( id, nombre, telefono )')
-    .gte('fecha_pedido', inicio.toISOString())
-    .lte('fecha_pedido', fin.toISOString())
-    .order('fecha_pedido', { ascending: false })
-
-  if (error2) throw error2
-  return data2 || []
+  return fetchWithCache('cache_pedidos_hoy', fetchPromise)
 }
 
 /** Lista los pedidos de una fecha histórica. */

@@ -14,6 +14,27 @@ export function formatearPesos(monto) {
   return `$${Number(monto || 0).toLocaleString('es-CL')}`
 }
 
+/**
+ * Ejecuta un fetch (promesa) y guarda el resultado en localStorage.
+ * Si falla por red (offline), retorna el caché más reciente.
+ */
+export async function fetchWithCache(cacheKey, fetchPromise) {
+  try {
+    const data = await fetchPromise;
+    localStorage.setItem(cacheKey, JSON.stringify(data));
+    return data;
+  } catch (err) {
+    if (!navigator.onLine || err.message === 'Failed to fetch' || err.message.includes('fetch')) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        console.warn(`[Offline] Usando caché local para: ${cacheKey}`);
+        return JSON.parse(cached);
+      }
+    }
+    throw err;
+  }
+}
+
 export const LABELS_ESTADO = {
   pendiente:   'Pendiente',
   produciendo: 'En proceso', // legacy, ya no se usa en flujo nuevo

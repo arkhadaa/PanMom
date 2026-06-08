@@ -5,15 +5,20 @@
 // =============================================
 
 import { supabase } from './supabase'
+import { fetchWithCache } from './helpers'
 
 export async function listarProductos() {
-  const { data, error } = await supabase
+  const fetchPromise = supabase
     .from('productos')
     .select('*')
     .eq('activo', true)
     .order('id')
-  if (error) throw error
-  return data || []
+    .then(({ data, error }) => {
+      if (error) throw error;
+      return data || [];
+    });
+
+  return fetchWithCache('cache_productos', fetchPromise);
 }
 
 export async function crearProducto({ nombre, precio_venta, tiene_receta = false, receta_id = null }) {

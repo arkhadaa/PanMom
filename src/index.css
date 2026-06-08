@@ -61,6 +61,7 @@
     background-color: #faf7f4;
     color: var(--color-gray-800);
     min-height: 100vh;
+    overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
   }
 
