@@ -132,6 +132,28 @@ export default function App() {
   const [costos, setCostos]         = useState(null)
   const [tabCostos, setTabCostos]   = useState('insumos')
 
+  // ── Navegación por Gestos (Swipe) ──
+  const swipeTabs = ['dashboard', 'pedidos', 'agregar'];
+  if (['productor', 'superadmin'].includes(usuarioActual?.rol)) {
+    swipeTabs.push('produccion');
+  }
+  swipeTabs.push('deudas');
+
+  const { onTouchStart, onTouchEnd } = useSwipe({
+    onSwipeLeft: () => {
+      const idx = swipeTabs.indexOf(tabActivo);
+      if (idx !== -1 && idx < swipeTabs.length - 1) {
+        setTabActivo(swipeTabs[idx + 1]);
+      }
+    },
+    onSwipeRight: () => {
+      const idx = swipeTabs.indexOf(tabActivo);
+      if (idx !== -1 && idx > 0) {
+        setTabActivo(swipeTabs[idx - 1]);
+      }
+    }
+  });
+
   const supabaseConfigurado =
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_URL !== 'https://placeholder.supabase.co'
@@ -338,28 +360,6 @@ export default function App() {
     guardarSesionLocal(null)
     setUsuarioActual(null)
   }
-
-  // ── Navegación por Gestos (Swipe) ──
-  const swipeTabs = ['dashboard', 'pedidos', 'agregar'];
-  if (['productor', 'superadmin'].includes(usuarioActual?.rol)) {
-    swipeTabs.push('produccion');
-  }
-  swipeTabs.push('deudas');
-
-  const { onTouchStart, onTouchEnd } = useSwipe({
-    onSwipeLeft: () => {
-      const idx = swipeTabs.indexOf(tabActivo);
-      if (idx !== -1 && idx < swipeTabs.length - 1) {
-        setTabActivo(swipeTabs[idx + 1]);
-      }
-    },
-    onSwipeRight: () => {
-      const idx = swipeTabs.indexOf(tabActivo);
-      if (idx !== -1 && idx > 0) {
-        setTabActivo(swipeTabs[idx - 1]);
-      }
-    }
-  });
 
   return (
     <div 
