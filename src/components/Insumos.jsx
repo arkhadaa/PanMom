@@ -159,15 +159,15 @@ function TarjetaInsumo({ insumo, onEditar, onEliminar }) {
   }
 
   return (
-    <div className="card animate-slide-in">
+    <div className="card animate-slide-in flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="font-bold text-gray-800">{insumo.nombre}</span>
           </div>
-          {/* Cantidad comprada → precio total */}
+          {/* Precio de Referencia Teórico */}
           <p className="text-xs text-gray-400">
-            {formatearCantidad(insumo.cantidad_compra, insumo.unidad)} por {formatearPesos(insumo.precio_compra)}
+            Referencia: {formatearPesos(insumo.precio_compra)} por {formatearCantidad(insumo.cantidad_compra, insumo.unidad)}
           </p>
           {/* Costo unitario calculado */}
           <p className="text-sm font-bold text-green-700 mt-0.5">
@@ -175,13 +175,15 @@ function TarjetaInsumo({ insumo, onEditar, onEliminar }) {
           </p>
         </div>
 
-        <div className="flex gap-1.5 flex-shrink-0">
-          <button onClick={() => onEditar(insumo)} className="btn-orange !p-2.5 !rounded-xl" title="Editar">
-            <Pencil size={15} />
-          </button>
-          <button onClick={handleEliminar} disabled={eliminando} className="btn-danger !p-2.5 !rounded-xl" title="Eliminar">
-            {eliminando ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-          </button>
+        <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
+          <div className="flex gap-1.5 mt-1">
+            <button onClick={() => onEditar(insumo)} className="btn-orange !p-2 !rounded-lg" title="Editar Precio">
+              <Pencil size={13} /> Editar
+            </button>
+            <button onClick={handleEliminar} disabled={eliminando} className="btn-secondary !p-2 !rounded-lg hover:!text-red-600" title="Eliminar">
+              {eliminando ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -190,33 +192,33 @@ function TarjetaInsumo({ insumo, onEditar, onEliminar }) {
 
 // ─── Pantalla principal ────────────────────────────────────────────────────────
 export default function Insumos() {
-  const [insumos, setInsumos]         = useState([])
-  const [cargando, setCargando]       = useState(true)
+  const [insumos, setInsumos] = useState([])
+  const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
-  const [editando, setEditando]       = useState(null)
-  const [exito, setExito]             = useState(false)
+  const [editando, setEditando] = useState(null)
+  const [exito, setExito] = useState(false)
 
-  const cargar = async () => {
-    setCargando(true)
-    try { setInsumos(await listarInsumos()) }
-    catch (err) { console.error(err) }
-    finally { setCargando(false) }
-  }
+  useEffect(() => {
+    listarInsumos()
+      .then(setInsumos)
+      .catch(console.error)
+      .finally(() => setCargando(false))
+  }, [])
 
-  useEffect(() => { cargar() }, [])
-
-  const handleCrear = async (datos) => {
-    const nuevo = await crearInsumo(datos)
+  const handleCrear = async (i) => {
+    const nuevo = await crearInsumo(i)
     setInsumos(prev => [...prev, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)))
     setMostrarForm(false)
     setExito(true)
-    setTimeout(() => setExito(false), 2000)
+    setTimeout(() => setExito(false), 2500)
   }
 
-  const handleEditar = async (datos) => {
-    const actualizado = await editarInsumo(editando.id, datos)
-    setInsumos(prev => prev.map(i => i.id === actualizado.id ? actualizado : i))
+  const handleEditar = async (i) => {
+    const editado = await editarInsumo(editando.id, i)
+    setInsumos(prev => prev.map(item => item.id === editando.id ? editado : item))
     setEditando(null)
+    setExito(true)
+    setTimeout(() => setExito(false), 2500)
   }
 
   const handleEliminar = async (id) => {
@@ -229,8 +231,8 @@ export default function Insumos() {
       {/* Encabezado */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-800">Insumos</h2>
-          <p className="text-sm text-gray-500">Ingredientes y sus precios</p>
+          <h2 className="text-xl font-bold text-gray-800">Precios Base (Insumos)</h2>
+          <p className="text-sm text-gray-500">Configura el costo teórico de tus ingredientes</p>
         </div>
         {!mostrarForm && !editando && (
           <button onClick={() => setMostrarForm(true)} className="btn-primary !py-2.5">
@@ -239,10 +241,14 @@ export default function Insumos() {
         )}
       </div>
 
+      <div className="bg-blue-50 text-blue-800 p-3 rounded-xl mb-4 text-xs font-medium border border-blue-100">
+        ℹ️ <strong>Nota:</strong> Esta sección es puramente teórica para calcular el margen de tus recetas. Las compras reales del día a día deben anotarse en la pestaña <strong>Inicio &gt; Registrar Gasto</strong>.
+      </div>
+
       {exito && (
         <div className="mb-3 flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 animate-fade-up">
           <CheckCircle size={16} className="text-green-500" />
-          <span className="text-sm font-semibold text-green-800">Insumo guardado ✓</span>
+          <span className="text-sm font-semibold text-green-800">Guardado ✓</span>
         </div>
       )}
 
@@ -263,7 +269,7 @@ export default function Insumos() {
           <div className="text-5xl mb-3">🧂</div>
           <h3 className="font-bold text-gray-700 mb-1">Sin insumos aún</h3>
           <p className="text-sm text-gray-400 mb-4">
-            Agrega los ingredientes con precio y cantidad de compra. El costo por kg se calcula solo.
+            Agrega los ingredientes con un precio de referencia para que el sistema calcule el costo de tus recetas.
           </p>
           <button onClick={() => setMostrarForm(true)} className="btn-primary mx-auto">
             <Plus size={16} /> Agregar primer insumo
@@ -273,25 +279,25 @@ export default function Insumos() {
 
       {!cargando && insumos.length > 0 && (
         <div className="space-y-2">
-          {insumos.map(insumo =>
-            editando?.id === insumo.id
-              ? (
+          {insumos.map(insumo => {
+            if (editando?.id === insumo.id) {
+              return (
                 <div key={insumo.id} className="mb-2">
                   <FormInsumo insumo={insumo} onGuardar={handleEditar} onCancelar={() => setEditando(null)} />
                 </div>
               )
-              : (
-                <TarjetaInsumo
-                  key={insumo.id}
-                  insumo={insumo}
-                  onEditar={setEditando}
-                  onEliminar={handleEliminar}
-                />
-              )
-          )}
+            }
+            return (
+              <TarjetaInsumo
+                key={insumo.id}
+                insumo={insumo}
+                onEditar={setEditando}
+                onEliminar={handleEliminar}
+              />
+            )
+          })}
         </div>
       )}
-
       {!cargando && insumos.length > 0 && (
         <div className="mt-4 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
           <p className="text-xs text-blue-700">

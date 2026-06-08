@@ -64,25 +64,42 @@ export function calcularStockHoy(produccion, pedidos) {
   for (const p of produccion || []) {
     const receta = p.recetas
     if (!receta) continue
-    if (!stockPorReceta[receta.id]) {
-      stockPorReceta[receta.id] = {
-        nombre:    receta.nombre,
+    
+    // Unificar "pan 1kg" (receta 3) con "Pan corriente" (receta 1)
+    const poolId = receta.id === 3 ? 1 : receta.id
+    const poolNombre = receta.id === 3 ? 'Pan corriente' : receta.nombre
+
+    if (!stockPorReceta[poolId]) {
+      stockPorReceta[poolId] = {
+        receta_id: poolId,
+        nombre:    poolNombre,
         producidos: 0,
         vendidos:  0,
       }
     }
-    stockPorReceta[receta.id].producidos += p.cargas * (receta.panes_por_carga || 0)
+    stockPorReceta[poolId].producidos += p.cargas * (receta.panes_por_carga || 0)
   }
 
   // Restar panes vendidos (items de pedidos no anulados cuyo producto tiene receta_id)
   for (const pedido of pedidos || []) {
     if (pedido.estado === 'anulado') continue
     for (const item of pedido.pedido_items || []) {
-      const recetaId = item.productos?.receta_id
-      if (recetaId && stockPorReceta[recetaId]) {
+      const originalRecetaId = item.productos?.receta_id
+      if (originalRecetaId) {
+        // Unificar también al restar (por si hay ventas históricas del producto "pan 1kg")
+        const poolId = originalRecetaId === 3 ? 1 : originalRecetaId
+
+        if (!stockPorReceta[poolId]) {
+          stockPorReceta[poolId] = {
+            receta_id: poolId,
+            nombre:    item.productos?.recetas?.nombre || item.productos?.nombre || 'Producto sin nombre',
+            producidos: 0,
+            vendidos:  0,
+          }
+        }
         // cantidad_panes indica cuántos panes físicos consume una unidad (ej: oferta = 7)
         const panesPorUnidad = item.productos?.cantidad_panes || 1
-        stockPorReceta[recetaId].vendidos += (item.cantidad || 0) * panesPorUnidad
+        stockPorReceta[poolId].vendidos += (item.cantidad || 0) * panesPorUnidad
       }
     }
   }

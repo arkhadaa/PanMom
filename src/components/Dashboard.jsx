@@ -1,85 +1,49 @@
-// =============================================
-// Dashboard.jsx
-// Pantalla principal: producción, caja del día,
-// ventas y estado de pedidos.
-// =============================================
-
-import { useMemo, useState, useEffect, memo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import {
-  DollarSign, AlertCircle, Clock, ChefHat,
-  PackageCheck, TrendingUp, TrendingDown, RefreshCw,
-  Percent, Loader2, Trash2, ArrowDownCircle,
-  Star, Receipt, ShoppingBag, Wallet
+  Wallet, TrendingUp, TrendingDown, RefreshCw,
+  ArrowDownCircle, UserMinus, CreditCard, Briefcase, Loader2,
+  X, CheckCircle, Lock
 } from 'lucide-react'
-import { formatearPesos, calcularResumenProduccion, registrarCierreCaja, calcularStockHoy, calcularDesgloseVentas } from '../services/supabaseClient'
+import { formatearPesos, listarCuentasClientes, obtenerLimitesDiaNegocio, registrarCierreCaja } from '../services/supabaseClient'
 
-// ─── Tarjeta de estadística ───────────────────────────────────────────────────
-function StatCard({ icon: Icon, label, value, sublabel, bgClass, textClass, iconBg }) {
+// ─── Componentes Rápidos ──────────────────────────────────────────────
+function BotonAccion({ icon: Icon, label, colorCls, onClick }) {
   return (
-    <div className={`stat-card ${bgClass} animate-fade-up`}>
-      <div className="flex items-start justify-between mb-2">
-        <div className={`rounded-xl p-2 ${iconBg}`}>
-          <Icon size={20} className={textClass} strokeWidth={2} />
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center p-3 rounded-xl bg-white border border-gray-100 shadow-sm active:scale-95 transition-transform ${colorCls}`}
+    >
+      <Icon size={24} className="mb-1.5" />
+      <span className="text-xs font-bold text-gray-700">{label}</span>
+    </button>
+  )
+}
+
+// ─── Modal Básico ────────────────────────────────────────────────────────────
+function ModalSimple({ titulo, isOpen, onClose, children }) {
+  if (!isOpen) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 sm:p-0 bg-black/40 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white w-full sm:max-w-md rounded-2xl shadow-xl overflow-hidden animate-slide-up">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <h3 className="font-bold text-gray-800">{titulo}</h3>
+          <button onClick={onClose} className="p-2 bg-gray-50 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="p-4">
+          {children}
         </div>
       </div>
-      <div className={`stat-value ${textClass}`}>{value}</div>
-      <div className={`text-xs font-semibold mt-0.5 ${textClass} opacity-80`}>{label}</div>
-      {sublabel && <div className={`text-xs mt-0.5 ${textClass} opacity-60`}>{sublabel}</div>}
     </div>
   )
 }
 
-// ─── Formulario Apertura Caja ──────────────────────────────────────────────
-function FormApertura({ onRegistrar }) {
+// ─── Formulario de Movimiento Unificado ──────────────────────────────────────
+function FormMovimiento({ onRegistrarGasto, onRegistrarRetiro, onClose }) {
+  const [tipo, setTipo] = useState('Compra insumos')
+  const [desc, setDesc] = useState('')
   const [monto, setMonto] = useState('')
-  const [cargando, setCarg] = useState(false)
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    const v = Number(monto)
-    if (monto === '' || v < 0 || cargando) return
-    setCarg(true)
-    try {
-      await onRegistrar(v)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setCarg(false)
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="px-4 py-3 bg-blue-50 border-b border-gray-100">
-      <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-        <Wallet size={12} className="text-blue-500" />
-        Apertura de caja
-      </p>
-      <div className="flex gap-2">
-        <input
-          type="number"
-          value={monto}
-          onChange={e => setMonto(e.target.value)}
-          placeholder="Monto inicial $"
-          min={0}
-          className="input-field !py-2 text-sm flex-1 min-w-0 bg-white"
-        />
-        <button
-          type="submit"
-          disabled={monto === '' || cargando}
-          className="btn-primary !py-2 !px-4 text-sm flex-shrink-0 !bg-blue-600 hover:!bg-blue-700 shadow-none border-none"
-          style={{ background: '#2563eb' }}
-        >
-          {cargando ? <Loader2 size={14} className="animate-spin" /> : 'Abrir Caja'}
-        </button>
-      </div>
-    </form>
-  )
-}
-
-// ─── Formulario rápido de retiro ──────────────────────────────────────────────
-function FormRetiro({ onRegistrar }) {
-  const [monto, setMonto] = useState('')
-  const [desc, setDesc]   = useState('')
   const [cargando, setCarg] = useState(false)
 
   const handleSubmit = async (e) => {
@@ -88,9 +52,15 @@ function FormRetiro({ onRegistrar }) {
     if (!v || v <= 0 || cargando) return
     setCarg(true)
     try {
-      await onRegistrar({ monto: v, descripcion: desc.trim() || null })
+      if (tipo === 'Retiro personal') {
+        await onRegistrarRetiro({ monto: v, descripcion: desc.trim() || null })
+      } else {
+        const descFinal = desc.trim() ? `${tipo} - ${desc.trim()}` : tipo
+        await onRegistrarGasto({ monto: v, descripcion: descFinal })
+      }
       setMonto('')
       setDesc('')
+      onClose()
     } catch (err) {
       console.error(err)
     } finally {
@@ -99,656 +69,429 @@ function FormRetiro({ onRegistrar }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card !py-3 space-y-2">
-      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-        <ArrowDownCircle size={12} className="text-orange-400" />
-        Registrar retiro
-      </p>
-      <div className="flex gap-2">
-        <input
-          type="number"
-          value={monto}
-          onChange={e => setMonto(e.target.value)}
-          placeholder="Monto $"
-          min={1}
-          className="input-field !py-2 text-sm flex-1 min-w-0"
-        />
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Tipo de Movimiento</label>
+        <select 
+          value={tipo} 
+          onChange={e => setTipo(e.target.value)}
+          className="input-field w-full !bg-white"
+        >
+          <option value="Compra insumos">🥖 Compra de insumos</option>
+          <option value="Bencina">⛽ Bencina</option>
+          <option value="Gasto negocio">🏠 Gasto del negocio</option>
+          <option value="Retiro personal">💸 Retiro personal</option>
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Descripción</label>
         <input
           type="text"
           value={desc}
           onChange={e => setDesc(e.target.value)}
-          placeholder="Descripción (opcional)"
+          placeholder={tipo === 'Compra insumos' ? 'Ej. Margarina x5' : 'Opcional...'}
           maxLength={100}
-          className="input-field !py-2 text-sm flex-1 min-w-0 hidden sm:block"
+          autoFocus
+          className="input-field"
         />
-        <button
-          type="submit"
-          disabled={!monto || cargando}
-          className="btn-primary !py-2 !px-4 text-sm flex-shrink-0"
-        >
-          {cargando ? <Loader2 size={14} className="animate-spin" /> : 'Agregar'}
-        </button>
       </div>
-      <input
-        type="text"
-        value={desc}
-        onChange={e => setDesc(e.target.value)}
-        placeholder="Descripción (opcional)"
-        maxLength={100}
-        className="input-field !py-2 text-sm w-full sm:hidden"
-      />
+      <div>
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Monto ($)</label>
+        <input
+          type="number"
+          value={monto}
+          onChange={e => setMonto(e.target.value)}
+          placeholder="Ej. 10000"
+          min={1}
+          className="input-field text-lg font-bold"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={!monto || cargando}
+        className="w-full btn-primary py-3 flex items-center justify-center gap-2"
+      >
+        {cargando ? <Loader2 size={18} className="animate-spin" /> : 'Guardar'}
+      </button>
     </form>
   )
 }
 
-// ─── Formulario rápido de gasto ──────────────────────────────────────────────
-function FormGasto({ onRegistrar }) {
-  const [monto, setMonto] = useState('')
-  const [desc, setDesc]   = useState('')
-  const [cargando, setCarg] = useState(false)
+// ─── Dashboard Principal ──────────────────────────────────────────────────────
+export default function Dashboard({
+  pedidos, cajaHoy = { ingresos_efectivo: 0, ingresos_transferencia: 0, total_gastos: 0, total_retiros: 0, caja_efectivo_final: 0 },
+  cargando, onRefresh,
+  onRegistrarGasto, onRegistrarRetiro,
+  usuarioActual,
+}) {
+  const [cuentas, setCuentas] = useState([])
+  const [cargandoCuentas, setCargandoCuentas] = useState(true)
+  
+  // Estados de modales
+  const [modalGasto, setModalGasto] = useState(false)
+  const [modalCierre, setModalCierre] = useState(false)
+  const [cargandoCierre, setCargandoCierre] = useState(false)
+  const [exitoCierre, setExitoCierre] = useState(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    const v = Number(monto)
-    if (!v || v <= 0 || cargando) return
-    setCarg(true)
+  // Cargar cuentas para deudas históricas
+  const cargarDeudas = async () => {
+    setCargandoCuentas(true)
     try {
-      await onRegistrar({ monto: v, descripcion: desc.trim() || null })
-      setMonto('')
-      setDesc('')
-    } catch (err) {
-      console.error(err)
+      const data = await listarCuentasClientes()
+      setCuentas(data)
+    } catch (e) {
+      console.error(e)
     } finally {
-      setCarg(false)
+      setCargandoCuentas(false)
     }
   }
-
-  return (
-    <form onSubmit={handleSubmit} className="card !py-3 space-y-2 mt-2">
-      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-        <ArrowDownCircle size={12} className="text-blue-500" />
-        Registrar gasto
-      </p>
-      <div className="flex gap-2">
-        <input
-          type="number"
-          value={monto}
-          onChange={e => setMonto(e.target.value)}
-          placeholder="Monto $"
-          min={1}
-          className="input-field !py-2 text-sm flex-1 min-w-0"
-        />
-        <input
-          type="text"
-          value={desc}
-          onChange={e => setDesc(e.target.value)}
-          placeholder="Descripción (ej. Harina)"
-          maxLength={100}
-          className="input-field !py-2 text-sm flex-1 min-w-0 hidden sm:block"
-        />
-        <button
-          type="submit"
-          disabled={!monto || cargando}
-          className="btn-primary !py-2 !px-4 text-sm flex-shrink-0 bg-blue-600 hover:bg-blue-700"
-        >
-          {cargando ? <Loader2 size={14} className="animate-spin" /> : 'Agregar'}
-        </button>
-      </div>
-      <input
-        type="text"
-        value={desc}
-        onChange={e => setDesc(e.target.value)}
-        placeholder="Descripción (ej. Harina)"
-        maxLength={100}
-        className="input-field !py-2 text-sm w-full sm:hidden"
-      />
-    </form>
-  )
-}
-
-// ─── Reloj aislado ──────────────────
-const SaludoReloj = memo(function SaludoReloj({ totalPedidos }) {
-  const [horaLocal, setHoraLocal] = useState('')
-  const [saludo, setSaludo]       = useState('')
 
   useEffect(() => {
-    const actualizar = () => {
-      const ahora = new Date()
-      setHoraLocal(ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }))
-      const h = ahora.getHours()
-      setSaludo(h >= 5 && h < 12 ? '¡Buenos días! 🌅' : h < 20 ? '¡Buenas tardes! ☀️' : '¡Buenas noches! 🌙')
-    }
-    actualizar()
-    const t = setInterval(actualizar, 10000)
-    return () => clearInterval(t)
+    cargarDeudas()
   }, [])
 
-  const fechaHoy = new Intl.DateTimeFormat('es-CL', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  }).format(new Date())
-
-  return (
-    <div>
-      <p className="text-xs font-medium text-gray-400 capitalize flex items-center gap-1.5">
-        {fechaHoy} <span className="w-1 h-1 bg-gray-300 rounded-full" /> <span className="font-bold text-gray-500">{horaLocal}</span>
-      </p>
-      <h2 className="text-xl font-bold text-gray-800">{saludo}</h2>
-      <p className="text-sm text-gray-500">
-        {totalPedidos === 0 ? 'Sin pedidos todavía hoy' : `${totalPedidos} pedido${totalPedidos !== 1 ? 's' : ''} hoy`}
-      </p>
-    </div>
-  )
-})
-
-// ─── Dashboard principal ──────────────────────────────────────────────────────
-export default function Dashboard({
-  pedidos, produccion, gastos = [], retiros = [], cajaHoy = { ingresos_efectivo: 0, ingresos_transferencia: 0, total_gastos: 0, total_retiros: 0, caja_efectivo_final: 0 },
-  cargando, onRefresh, costos,
-  onIrACostos, onIrAProduccion, onRegistrarRetiro, onEliminarRetiro,
-  onRegistrarGasto, onEliminarGasto,
-  usuarioActual,
-  onRegistrarApertura,
-}) {
-  const [cerrandoCaja, setCerrandoCaja] = useState(false)
-
-  const CLAVE_CIERRE = 'inesbread_cajaCerrada'
-  const hoyStr = new Date().toLocaleDateString('es-CL')
-
-  const [cajaCerrada, setCajaCerrada] = useState(() => {
-    try {
-      const guardado = JSON.parse(localStorage.getItem(CLAVE_CIERRE) || 'null')
-      return guardado?.fecha === hoyStr ? guardado.hora : false
-    } catch { return false }
-  })
-
-  // ── Totales de pedidos ──
-  const stats = useMemo(() => {
+  // ── Cálculos del día ──
+  const statsDia = useMemo(() => {
     const hoy = (pedidos || []).filter(p => p.estado !== 'anulado')
-
-    const dineroEsperado  = hoy.reduce((s, p) => s + (p.monto_pesos || 0), 0)
     
-    // Ahora tomamos el dinero abonado directamente desde pagos_cliente
-    const dineroRecibido  = hoy.reduce((s, p) => {
-      const pagos = p.pagos_cliente || []
-      const abonado = pagos.reduce((sum, pago) => sum + (pago.monto_efectivo || 0) + (pago.monto_transferencia || 0), 0)
-      return s + abonado
-    }, 0)
+    const ventasTotales = hoy.reduce((s, p) => s + (p.monto_pesos || 0), 0)
     
-    // El pendiente real es la suma de lo esperado menos lo recibido de esos pedidos
-    const dineroPendiente = hoy.reduce((s, p) => {
+    // Pendientes exactos de pedidos de HOY
+    const pendientesHoy = hoy.reduce((s, p) => {
       const pagos = p.pagos_cliente || []
       const abonado = pagos.reduce((sum, pago) => sum + (pago.monto_efectivo || 0) + (pago.monto_transferencia || 0), 0)
       return s + Math.max(0, (p.monto_pesos || 0) - abonado)
     }, 0)
-    
-    const cantPendientes = hoy.filter(p => p.estado === 'pendiente').length
-    const cantListos     = hoy.filter(p => p.estado === 'listo').length
-    const cantEntregados = hoy.filter(p => p.estado === 'entregado').length
-    
-    const totalPedidos = hoy.length
-    const porcentajePago = totalPedidos > 0 ? Math.round((dineroRecibido / dineroEsperado) * 100) : 0
-    const ticketPromedio = totalPedidos > 0 ? Math.round(dineroEsperado / totalPedidos) : 0
 
-    const conteoProductos = {}
+    // Desglose de quién debe de hoy
+    const deudoresHoyList = []
     hoy.forEach(p => {
-      if (p.pedido_items) {
-        p.pedido_items.forEach(item => {
-          const nombre = item.productos?.nombre || 'Desconocido'
-          conteoProductos[nombre] = (conteoProductos[nombre] || 0) + item.cantidad
-        })
+      const pagos = p.pagos_cliente || []
+      const abonado = pagos.reduce((sum, pago) => sum + (pago.monto_efectivo || 0) + (pago.monto_transferencia || 0), 0)
+      const debe = Math.max(0, (p.monto_pesos || 0) - abonado)
+      if (debe > 0) {
+        deudoresHoyList.push({ nombre: p.clientes?.nombre || 'Desconocido', monto: debe })
       }
     })
-    
-    let productoEstrella = 'Ninguno'
-    let maxCant = 0
-    Object.entries(conteoProductos).forEach(([nombre, cant]) => {
-      if (cant > maxCant) {
-        maxCant = cant
-        productoEstrella = nombre
-      }
-    })
+
+    // Agrupar por nombre (por si alguien hizo 2 pedidos hoy)
+    const agrupado = deudoresHoyList.reduce((acc, d) => {
+      acc[d.nombre] = (acc[d.nombre] || 0) + d.monto
+      return acc
+    }, {})
+
+    const deudoresHoy = Object.entries(agrupado)
+      .map(([nombre, monto]) => ({ nombre, monto }))
+      .sort((a, b) => b.monto - a.monto)
 
     return {
-      dineroEsperado, dineroPendiente, dineroRecibido,
-      cantPendientes, cantListos, cantEntregados,
-      totalPedidos, porcentajePago, ticketPromedio,
-      productoEstrella, maxCant
+      ventasTotales,
+      pendientesHoy,
+      deudoresHoy
     }
   }, [pedidos])
 
-  // ── Resumen de producción ──
-  const resumenProd = useMemo(
-    () => calcularResumenProduccion(produccion),
-    [produccion]
-  )
-  const hayProduccion = resumenProd.totalCargas > 0
+  // ── Cálculos Históricos ──
+  const statsHistorico = useMemo(() => {
+    const { inicio } = obtenerLimitesDiaNegocio()
+    const inicioLocalMs = inicio.getTime()
 
-  // ── Stock disponible ──
-  const stockHoy = useMemo(
-    () => calcularStockHoy(produccion, pedidos),
-    [produccion, pedidos]
-  )
+    let deudaHistoricaAtrasada = 0
+    let deudaTotalGlobal = 0
 
-  // ── Desglose de ventas ──
-  const desgloseVentas = useMemo(
-    () => calcularDesgloseVentas(pedidos),
-    [pedidos]
-  )
+    cuentas.forEach(c => {
+      deudaTotalGlobal += c.saldo
+      c.movimientos.forEach(m => {
+        const fechaMs = new Date(m.fecha).getTime()
+        if (fechaMs < inicioLocalMs) {
+          deudaHistoricaAtrasada += m.pendiente
+        }
+      })
+    })
+
+    return {
+      deudaTotalGlobal,
+      deudaHistoricaAtrasada
+    }
+  }, [cuentas])
 
   const handleCerrarCaja = async () => {
-    if (!window.confirm('¿Estás seguro de cerrar la caja de hoy? Esto guardará los totales en el historial.')) return
-    
-    setCerrandoCaja(true)
+    if (cargandoCierre) return
+    setCargandoCierre(true)
     try {
       await registrarCierreCaja({
-        total_ingresos_efectivo: cajaHoy.ingresos_efectivo,
-        total_ingresos_transferencia: cajaHoy.ingresos_transferencia,
-        total_gastos:      cajaHoy.total_gastos,
-        total_retiros:     cajaHoy.total_retiros,
-        total_ventas:      stats.dineroEsperado,
-        total_deuda_generada: stats.dineroPendiente,
+        total_gastos: cajaHoy.total_gastos || 0,
+        total_retiros: cajaHoy.total_retiros || 0,
+        total_ingresos_efectivo: cajaHoy.ingresos_efectivo || 0,
+        total_ingresos_transferencia: cajaHoy.ingresos_transferencia || 0,
+        total_ventas: statsDia.ventasTotales || 0,
+        total_deuda_generada: statsDia.pendientesHoy || 0,
+        notas: null
       })
-      const horaActual = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
-      localStorage.setItem(CLAVE_CIERRE, JSON.stringify({ fecha: hoyStr, hora: horaActual }))
-      setCajaCerrada(horaActual)
+      setExitoCierre(true)
+      setTimeout(() => {
+        setExitoCierre(false)
+        setModalCierre(false)
+      }, 2000)
     } catch (e) {
-      console.error('Error cerrando caja:', e)
-      alert(`Error cerrando caja:\n${e?.message || JSON.stringify(e)}`)
+      console.error(e)
+      alert("Error al cerrar caja: " + e.message)
     } finally {
-      setCerrandoCaja(false)
+      setCargandoCierre(false)
     }
   }
 
-  return (
-    <div className="p-4 safe-bottom max-w-4xl mx-auto">
+  const isLoading = cargando || cargandoCuentas
 
-      {/* ── Saludo ── */}
-      <div className="flex items-center justify-between mb-5">
-        <SaludoReloj totalPedidos={stats.totalPedidos} />
+  const capitalTotal = cajaHoy.caja_efectivo_final + statsHistorico.deudaTotalGlobal
+  const totalDisponible = cajaHoy.caja_efectivo_final + cajaHoy.ingresos_transferencia
+  const resultadoDia = statsDia.ventasTotales - cajaHoy.total_gastos
+
+  return (
+    <div className="p-4 safe-bottom max-w-lg mx-auto pb-24">
+      
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-gray-800">Dashboard</h2>
         <button
-          onClick={onRefresh}
-          disabled={cargando}
-          className={`btn-secondary gap-1.5 ${cargando ? 'opacity-50' : ''}`}
+          onClick={() => { onRefresh(); cargarDeudas(); }}
+          disabled={isLoading}
+          className={`btn-secondary gap-1.5 !px-3 !py-1.5 ${isLoading ? 'opacity-50' : ''}`}
         >
-          <RefreshCw size={15} className={cargando ? 'animate-spin' : ''} />
-          <span className="hidden sm:inline">Actualizar</span>
+          <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+          <span>Actualizar</span>
         </button>
       </div>
 
-      {/* PRODUCCIÓN DEL DÍA */}
-      {['productor', 'superadmin'].includes(usuarioActual?.rol) && (
-        <section className="mb-5">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
-            🏭 Producción del día
-          </h3>
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-20 text-orange-500">
+          <Loader2 size={32} className="animate-spin mb-4" />
+          <p className="font-semibold text-gray-500">Calculando números...</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          
+          {/* 1. CAPITAL DEL NEGOCIO */}
+          <div className="rounded-2xl p-5 shadow-lg bg-gray-900 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+              <Briefcase size={80} />
+            </div>
+            <p className="text-xs font-bold uppercase tracking-widest opacity-70 mb-1 flex items-center gap-1.5">
+              <Briefcase size={14} /> Capital del negocio
+            </p>
+            <p className="text-4xl font-black mb-4">{formatearPesos(capitalTotal)}</p>
+            
+            <div className="grid grid-cols-2 gap-4 border-t border-white/10 pt-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider opacity-60">Caja física</p>
+                <p className="font-bold text-lg text-emerald-400">{formatearPesos(cajaHoy.caja_efectivo_final)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider opacity-60">Fiados Totales</p>
+                <p className="font-bold text-lg text-orange-400">{formatearPesos(statsHistorico.deudaTotalGlobal)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. RESUMEN DE HOY */}
+          <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <TrendingUp size={16} className="text-blue-500" /> Resumen de hoy
+            </h3>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 text-sm">Ventas</span>
+                <span className="font-bold text-gray-800">{formatearPesos(statsDia.ventasTotales)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 text-sm">Gastos registrados</span>
+                <span className="font-bold text-red-500">− {formatearPesos(cajaHoy.total_gastos)}</span>
+              </div>
+              
+              <div className="pt-3 border-t border-dashed border-gray-200">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-bold text-gray-800">Resultado del día</span>
+                  <span className={`font-black text-lg ${resultadoDia >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {resultadoDia > 0 ? '+' : ''}{formatearPesos(resultadoDia)}
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-400 text-right uppercase tracking-wide">
+                  Ventas de hoy − Gastos registrados hoy
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 3. PLATA DISPONIBLE */}
+          <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <Wallet size={16} className="text-emerald-500" /> Plata disponible
+            </h3>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 text-sm">Caja física (Efectivo)</span>
+                <span className="font-bold text-gray-800">{formatearPesos(cajaHoy.caja_efectivo_final)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 text-sm">Débito / Transferencia</span>
+                <span className="font-bold text-blue-600">{formatearPesos(cajaHoy.ingresos_transferencia)}</span>
+              </div>
+              
+              <div className="pt-3 border-t border-gray-100">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-gray-800">Total disponible</span>
+                  <span className="font-black text-lg text-emerald-600">{formatearPesos(totalDisponible)}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 4. PENDIENTES / DEUDAS */}
+          <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <UserMinus size={16} className="text-orange-500" /> Pendientes
+            </h3>
+            
+            {/* Fiados de hoy */}
+            <div className="mb-4">
+              <div className="flex justify-between items-center bg-orange-50 p-3 rounded-xl mb-2">
+                <span className="font-bold text-orange-800 text-sm">Pendiente de hoy</span>
+                <span className="font-black text-orange-600 text-lg">{formatearPesos(statsDia.pendientesHoy)}</span>
+              </div>
+              
+              {statsDia.deudoresHoy.length > 0 ? (
+                <div className="space-y-1.5 px-2">
+                  {statsDia.deudoresHoy.slice(0, 5).map(d => (
+                    <div key={d.nombre} className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600 truncate mr-2">↳ {d.nombre}</span>
+                      <span className="font-semibold text-gray-800">{formatearPesos(d.monto)}</span>
+                    </div>
+                  ))}
+                  {statsDia.deudoresHoy.length > 5 && (
+                    <p className="text-xs text-gray-400 mt-2 italic">
+                      + {statsDia.deudoresHoy.length - 5} personas más...
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 italic px-2">Nadie quedó debiendo hoy. 🎉</p>
+              )}
+            </div>
+
+            {/* Deuda histórica */}
+            <div className="pt-4 border-t border-gray-100">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-gray-600 text-sm">Deuda histórica pendiente</span>
+                <span className="font-bold text-red-500">{formatearPesos(statsHistorico.deudaHistoricaAtrasada)}</span>
+              </div>
+              
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('cambiarTab', { detail: 'deudas' }))}
+                className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2 border border-gray-200"
+              >
+                ➡️ Ver todas las deudas
+              </button>
+            </div>
+          </section>
+
+      {/* 5. BOTONES RÁPIDOS */}
+      <div className="grid grid-cols-2 gap-3 pt-2">
+        <BotonAccion
+          icon={TrendingUp}
+          label="Nueva Venta"
+          colorCls="text-emerald-500 hover:bg-emerald-50"
+          onClick={() => window.dispatchEvent(new CustomEvent('cambiarTab', { detail: 'agregar' }))}
+        />
+        <BotonAccion
+          icon={TrendingDown}
+          label="Gasto / Retiro"
+          colorCls="text-red-500 hover:bg-red-50"
+          onClick={() => setModalGasto(true)}
+        />
+      </div>
+
+      {/* 6. ZONA SUPERADMIN */}
+      {usuarioActual?.rol === 'superadmin' && (
+        <div className="pt-6">
           <button
-            onClick={onIrAProduccion}
-            className="flex items-center gap-1 text-xs text-orange-500 font-semibold"
+            onClick={() => setModalCierre(true)}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-gray-900 hover:bg-black text-white rounded-xl font-bold transition-all active:scale-95 shadow-md"
           >
-            <ChefHat size={12} />
-            {hayProduccion ? 'Ver más' : 'Registrar'}
+            <Lock size={18} className="text-gray-400" />
+            Cerrar Caja (Día)
           </button>
         </div>
-
-        {!hayProduccion ? (
-          <div
-            onClick={onIrAProduccion}
-            className="card border-dashed border-2 border-orange-200 text-center py-6 cursor-pointer hover:bg-orange-50 transition-colors"
-          >
-            <p className="text-3xl mb-2">🍞</p>
-            <p className="text-sm font-semibold text-gray-700">Sin producción registrada hoy</p>
-            <p className="text-xs text-gray-400 mt-1">Toca aquí para registrar las cargas horneadas.</p>
-            <span className="inline-block mt-3 text-xs font-bold text-orange-500 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-full">
-              + Registrar cargas →
-            </span>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <StatCard
-                icon={ChefHat}
-                label="Cargas realizadas"
-                value={resumenProd.totalCargas}
-                sublabel={`${resumenProd.totalPanes} panes estimados`}
-                bgClass="bg-gradient-to-br from-amber-500 to-orange-600"
-                textClass="text-white"
-                iconBg="bg-white/20"
-              />
-              <StatCard
-                icon={TrendingUp}
-                label="Ingreso estimado"
-                value={formatearPesos(resumenProd.totalIngreso)}
-                sublabel="si se vende todo"
-                bgClass="bg-gradient-to-br from-emerald-500 to-teal-600"
-                textClass="text-white"
-                iconBg="bg-white/20"
-              />
-              <StatCard
-                icon={TrendingDown}
-                label="Costo producción"
-                value={formatearPesos(resumenProd.totalCosto)}
-                sublabel="materia prima"
-                bgClass="bg-gradient-to-br from-purple-500 to-indigo-600"
-                textClass="text-white"
-                iconBg="bg-white/20"
-              />
-              <StatCard
-                icon={Percent}
-                label="Ganancia estimada"
-                value={formatearPesos(resumenProd.ganancia)}
-                sublabel={`${resumenProd.margen}% de margen`}
-                bgClass={resumenProd.ganancia >= 0
-                  ? 'bg-gradient-to-br from-green-400 to-emerald-500'
-                  : 'bg-gradient-to-br from-red-400 to-rose-500'
-                }
-                textClass="text-white"
-                iconBg="bg-white/20"
-              />
-            </div>
-
-            <div className="card !py-3">
-              <div className="flex items-center justify-between text-xs font-semibold text-gray-600 mb-2">
-                <span>Margen de ganancia</span>
-                <span className={`font-bold ${
-                  resumenProd.margen >= 50 ? 'text-green-600' :
-                  resumenProd.margen >= 30 ? 'text-amber-600' : 'text-red-600'
-                }`}>{resumenProd.margen}%</span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${
-                    resumenProd.margen >= 50 ? 'bg-gradient-to-r from-emerald-400 to-green-500' :
-                    resumenProd.margen >= 30 ? 'bg-gradient-to-r from-yellow-400 to-amber-500' :
-                    'bg-gradient-to-r from-red-400 to-rose-500'
-                  }`}
-                  style={{ width: `${Math.min(100, Math.max(0, resumenProd.margen))}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-gray-400 mt-1.5">
-                <span>Costo: {formatearPesos(resumenProd.totalCosto)}</span>
-                <span>Ingreso: {formatearPesos(resumenProd.totalIngreso)}</span>
-              </div>
-            </div>
-          </>
-        )}
-
-        {stockHoy.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {stockHoy.map(s => (
-              <div key={s.nombre} className="bg-white rounded-xl px-4 py-3 border border-gray-100 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-bold text-gray-700">🍞 {s.nombre}</p>
-                  <p className="text-xs text-gray-400">{s.producidos} producidos · {s.vendidos} vendidos</p>
-                </div>
-                <div className={`text-right`}>
-                  <p className={`text-2xl font-extrabold ${
-                    s.disponible <= 0 ? 'text-red-500' :
-                    s.disponible <= 5 ? 'text-amber-500' : 'text-green-600'
-                  }`}>{Math.max(0, s.disponible)}</p>
-                  <p className="text-xs text-gray-400">disponibles</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
       )}
 
-      {/* VENTAS DEL DÍA */}
-      <section className="mb-5">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-          💰 Ventas del día
-        </h3>
-        <div className="grid grid-cols-2 gap-2 mb-2">
-          <StatCard
-            icon={Receipt}
-            label="Gasto Promedio"
-            value={formatearPesos(stats.ticketPromedio)}
-            sublabel="Gasto por cliente"
-            bgClass="bg-gradient-to-br from-blue-500 to-indigo-600"
-            textClass="text-white"
-            iconBg="bg-white/20"
-          />
-          <StatCard
-            icon={Star}
-            label="Más vendido"
-            value={stats.productoEstrella}
-            sublabel={`${stats.maxCant} unidades vendidas`}
-            bgClass="bg-gradient-to-br from-amber-400 to-orange-500"
-            textClass="text-white"
-            iconBg="bg-white/20"
-          />
-        </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <StatCard
-            icon={ShoppingBag}
-            label="Ventas Hoy"
-            value={formatearPesos(stats.dineroEsperado)}
-            sublabel={`${stats.totalPedidos} pedidos totales`}
-            bgClass="bg-gradient-to-br from-teal-500 to-cyan-600"
-            textClass="text-white"
-            iconBg="bg-white/20"
-          />
-          <StatCard
-            icon={DollarSign}
-            label="Recibido"
-            value={formatearPesos(stats.dineroRecibido)}
-            sublabel={`${stats.porcentajePago}% de pedidos pagados`}
-            bgClass="bg-gradient-to-br from-green-400 to-emerald-500"
-            textClass="text-white"
-            iconBg="bg-white/20"
-          />
-          <StatCard
-            icon={AlertCircle}
-            label="Por cobrar"
-            value={formatearPesos(stats.dineroPendiente)}
-            sublabel="ventas de hoy pendientes"
-            bgClass={stats.dineroPendiente > 0
-              ? 'bg-gradient-to-br from-red-400 to-rose-500'
-              : 'bg-gradient-to-br from-gray-300 to-gray-400'
-            }
-            textClass="text-white"
-            iconBg="bg-white/20"
-          />
-        </div>
-      </section>
-
-      {/* Desglose de ventas por producto */}
-      {desgloseVentas.length > 0 && (
-        <section className="mb-5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-            📦 Vendido hoy por producto
-          </h3>
-          <div className="card !p-0 overflow-hidden">
-            {desgloseVentas.map((item, i) => (
-              <div key={item.nombre} className={`flex items-center justify-between px-4 py-3 ${i < desgloseVentas.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-extrabold text-orange-400 w-8 text-right">{item.cantidad}</span>
-                  <span className="text-sm font-semibold text-gray-700">{item.nombre}</span>
-                </div>
-                <span className="text-sm font-bold text-green-600">{formatearPesos(item.total)}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* CAJA DEL DÍA */}
-      <section className="mb-5">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-          💵 Caja del día
-        </h3>
-
-        <div className="card !p-0 overflow-hidden mb-3">
-          {usuarioActual?.rol === 'superadmin' && !cajaHoy.apertura_registrada && onRegistrarApertura && (
-            <FormApertura onRegistrar={onRegistrarApertura} />
-          )}
-          {[
-            { label: '📥 Apertura de Caja',       value: cajaHoy.monto_apertura,             positivo: true, alwaysShow: cajaHoy.apertura_registrada },
-            { label: '💵 Ingresos Efectivo',      value: cajaHoy.ingresos_efectivo,          positivo: true  },
-            { label: '📱 Ingresos Transferencia', value: cajaHoy.ingresos_transferencia,     positivo: true  },
-            { label: '📦 Gastos',                 value: cajaHoy.total_gastos,              positivo: false },
-            { label: '💸 Retiros',                value: cajaHoy.total_retiros,             positivo: false },
-          ].filter(({ value, positivo, alwaysShow }) => alwaysShow || !positivo || value > 0)
-           .map(({ label, value, positivo }) => (
-            <div key={label} className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-0">
-              <span className="text-sm text-gray-600">{label}</span>
-              <span className={`font-bold text-sm ${positivo ? 'text-green-600' : value > 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                {positivo ? '' : value > 0 ? '−' : ''}{formatearPesos(value)}
-              </span>
-            </div>
-          ))}
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t-2 border-gray-200">
-            <div>
-              <span className="font-bold text-gray-700 block">🏦 Caja física</span>
-              <span className="text-[10px] text-gray-500 block leading-tight mt-0.5">Dinero real en cajón (solo efectivo)</span>
-            </div>
-            <span className={`font-bold text-lg ${cajaHoy.caja_efectivo_final >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatearPesos(cajaHoy.caja_efectivo_final)}
-            </span>
-          </div>
-        </div>
-
-        {usuarioActual?.rol === 'superadmin' && (
-          <div className="mb-4">
-            {cajaCerrada ? (
-              <div className="w-full rounded-xl bg-green-50 border border-green-200 px-4 py-3.5 flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-green-600 font-extrabold text-base">✅ Caja cerrada hoy</span>
-                </div>
-                <p className="text-xs text-green-700">
-                  Guardada a las <strong>{cajaCerrada}</strong> — los totales están en el Historial.
-                </p>
-                <button
-                  onClick={() => {
-                    if (!window.confirm('¿Cerrar caja de nuevo? Se guardará otro registro en el historial.')) return
-                    localStorage.removeItem(CLAVE_CIERRE)
-                    setCajaCerrada(false)
-                  }}
-                  className="text-[11px] text-green-500 underline text-left mt-0.5 w-fit"
-                >
-                  Registrar otro cierre
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleCerrarCaja}
-                disabled={cerrandoCaja}
-                className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-gray-800 text-white hover:bg-gray-700 active:scale-95 transition-all shadow-sm disabled:opacity-60"
-              >
-                {cerrandoCaja
-                  ? <><Loader2 size={18} className="animate-spin" /> Guardando historial...</>
-                  : <>🔒 Guardar Cierre de Caja en Historial</>
-                }
-              </button>
-            )}
-          </div>
-        )}
-
-        {onRegistrarGasto && (
-          <FormGasto onRegistrar={onRegistrarGasto} />
-        )}
-
-        {onRegistrarRetiro && (
-          <FormRetiro onRegistrar={onRegistrarRetiro} />
-        )}
-
-        {(gastos.length > 0 || retiros.length > 0) && (
-          <div className="mt-4 space-y-3">
-            {gastos.length > 0 && (
-              <div>
-                <p className="text-xs text-gray-400 font-medium mb-1.5">Gastos registrados:</p>
-                <div className="space-y-1.5">
-                  {gastos.map(g => (
-                    <div key={g.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border border-gray-100">
-                      <span className="text-sm text-gray-600 flex-1 truncate">{g.descripcion || 'Gasto'}</span>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="font-bold text-sm text-blue-600">{formatearPesos(g.monto)}</span>
-                        {onEliminarGasto && (
-                          <button
-                            onClick={() => onEliminarGasto(g.id)}
-                            className="text-gray-300 hover:text-red-400 transition-colors"
-                            title="Eliminar gasto"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {retiros.length > 0 && (
-              <div>
-                <p className="text-xs text-gray-400 font-medium mb-1.5">Retiros registrados:</p>
-                <div className="space-y-1.5">
-                  {retiros.map(r => (
-                    <div key={r.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border border-gray-100">
-                      <span className="text-sm text-gray-600 flex-1 truncate">{r.descripcion || 'Retiro'}</span>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="font-bold text-sm text-orange-600">{formatearPesos(r.monto)}</span>
-                        {onEliminarRetiro && (
-                          <button
-                            onClick={() => onEliminarRetiro(r.id)}
-                            className="text-gray-300 hover:text-red-400 transition-colors"
-                            title="Eliminar retiro"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* ESTADO DE PEDIDOS */}
-      <section className="mb-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-          📋 Estado de pedidos
-        </h3>
-        <div className="card p-0 overflow-hidden">
-          {[
-            { icon: Clock,        label: 'Pendientes',           value: stats.cantPendientes, color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-100' },
-            { icon: PackageCheck, label: 'Listos para entregar', value: stats.cantListos,     color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-100'  },
-            { icon: PackageCheck, label: 'Entregados',           value: stats.cantEntregados, color: 'text-gray-500',   bg: 'bg-gray-50',   border: 'border-gray-100'   },
-          ].map(({ icon: Icon, label, value, color, bg, border }, i, arr) => (
-            <div
-              key={label}
-              className={`flex items-center justify-between px-4 py-3 ${bg} ${i < arr.length - 1 ? `border-b ${border}` : ''}`}
-            >
-              <div className="flex items-center gap-3">
-                <Icon size={18} className={color} strokeWidth={2} />
-                <span className="text-sm font-medium text-gray-700">{label}</span>
-              </div>
-              <span className={`text-xl font-bold ${color}`}>{value}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {!cargando && stats.totalPedidos === 0 && (
-        <div className="card text-center py-8">
-          <div className="text-5xl mb-3">🍞</div>
-          <h3 className="font-bold text-gray-700 mb-1">Sin pedidos hoy</h3>
-          <p className="text-sm text-gray-400">
-            Toca <strong>Agregar</strong> para registrar el primer pedido del día.
-          </p>
-        </div>
-      )}
-
-      {cargando && (
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => <div key={i} className="skeleton h-16 w-full" />)}
-        </div>
-      )}
     </div>
+  )}
+
+  {/* MODALES */}
+  <ModalSimple
+    titulo="Registrar Movimiento"
+    isOpen={modalGasto}
+    onClose={() => setModalGasto(false)}
+  >
+    <FormMovimiento
+      onRegistrarGasto={onRegistrarGasto}
+      onRegistrarRetiro={onRegistrarRetiro}
+      onClose={() => setModalGasto(false)}
+    />
+  </ModalSimple>
+
+  <ModalSimple
+    titulo="Cierre de Caja"
+    isOpen={modalCierre}
+    onClose={() => !cargandoCierre && setModalCierre(false)}
+  >
+    {exitoCierre ? (
+      <div className="flex flex-col items-center justify-center py-8 text-center animate-fade-in">
+        <CheckCircle size={64} className="text-emerald-500 mb-4" />
+        <h3 className="text-xl font-black text-gray-800">¡Caja Cerrada!</h3>
+        <p className="text-gray-500 mt-2">Los datos se han guardado en el historial.</p>
+      </div>
+    ) : (
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600 mb-4">
+          Al cerrar la caja, se guardará un registro histórico con el resumen financiero actual del día.
+        </p>
+        
+        <div className="bg-gray-50 p-4 rounded-xl space-y-2 border border-gray-100">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Total Ventas:</span>
+            <span className="font-bold text-gray-800">{formatearPesos(statsDia.ventasTotales)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Total Gastos/Retiros:</span>
+            <span className="font-bold text-red-500">-{formatearPesos(cajaHoy.total_gastos + cajaHoy.total_retiros)}</span>
+          </div>
+          <div className="flex justify-between text-sm pt-2 border-t border-gray-200 mt-2">
+            <span className="font-bold text-gray-800">Caja Física Final:</span>
+            <span className="font-black text-emerald-600 text-lg">{formatearPesos(cajaHoy.caja_efectivo_final)}</span>
+          </div>
+        </div>
+
+        <div className="pt-4 flex gap-3">
+          <button
+            onClick={() => setModalCierre(false)}
+            disabled={cargandoCierre}
+            className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleCerrarCaja}
+            disabled={cargandoCierre}
+            className="flex-1 py-3 bg-gray-900 hover:bg-black text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            {cargandoCierre ? <Loader2 size={18} className="animate-spin" /> : 'Confirmar Cierre'}
+          </button>
+        </div>
+      </div>
+    )}
+  </ModalSimple>
+
+</div>
   )
 }

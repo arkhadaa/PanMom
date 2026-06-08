@@ -238,8 +238,8 @@ function FormIngrediente({ receta, insumos, onGuardar }) {
             >
               {unidadesValidas.map(u => <option key={u} value={u}>{u}</option>)}
             </select>
-            <button type="submit" disabled={!cantidad || guardando} className="btn-primary !py-2 !px-3 flex-shrink-0">
-              {guardando ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+            <button type="submit" disabled={!cantidad || guardando} className="btn-primary !py-2 !px-4 flex-shrink-0 text-sm">
+              {guardando ? <Loader2 size={15} className="animate-spin" /> : <><Plus size={14} className="mr-1 inline" /> Añadir</>}
             </button>
           </div>
 

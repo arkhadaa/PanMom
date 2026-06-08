@@ -38,6 +38,16 @@ export async function crearReceta({ nombre, panes_por_carga, precio_venta }) {
     .select()
     .single()
   if (error) throw error
+
+  // Sincronizar: Crear automáticamente el producto para que se pueda vender
+  await supabase.from('productos').insert({
+    nombre: data.nombre,
+    precio_venta: data.precio_venta,
+    tiene_receta: true,
+    receta_id: data.id,
+    cantidad_panes: 1
+  })
+
   return data
 }
 
@@ -53,10 +63,18 @@ export async function editarReceta(id, { nombre, panes_por_carga, precio_venta }
     .select()
     .single()
   if (error) throw error
+
+  // Sincronizar: Actualizar el producto vinculado
+  await supabase.from('productos')
+    .update({ nombre: data.nombre, precio_venta: data.precio_venta })
+    .eq('receta_id', id)
+
   return data
 }
 
 export async function eliminarReceta(id) {
+  // Sincronizar: Eliminar producto vinculado (soft-delete o hard delete)
+  await supabase.from('productos').delete().eq('receta_id', id)
   const { error } = await supabase.from('recetas').delete().eq('id', id)
   if (error) throw error
 }

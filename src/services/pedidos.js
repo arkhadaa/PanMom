@@ -157,7 +157,7 @@ export async function listarPedidosHoy() {
 
   const { data, error } = await supabase
     .from('pedidos')
-    .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, producto_id, cantidad, precio_unitario, productos ( id, nombre, precio_venta, receta_id, cantidad_panes ) ), pagos_cliente ( monto_efectivo, monto_transferencia )')
+    .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, producto_id, cantidad, precio_unitario, productos ( id, nombre, precio_venta, receta_id, cantidad_panes, recetas ( nombre ) ) ), pagos_cliente ( monto_efectivo, monto_transferencia )')
     .gte('fecha_pedido', inicio.toISOString())
     .lte('fecha_pedido', fin.toISOString())
     .order('fecha_pedido', { ascending: false })
@@ -182,7 +182,7 @@ export async function listarPedidosPorFecha(fechaStr) {
 
   const { data, error } = await supabase
     .from('pedidos')
-    .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, producto_id, cantidad, precio_unitario, productos ( id, nombre, precio_venta, receta_id, cantidad_panes ) ), pagos_cliente ( monto_efectivo, monto_transferencia )')
+    .select('*, clientes ( id, nombre, telefono ), pedido_items ( id, producto_id, cantidad, precio_unitario, productos ( id, nombre, precio_venta, receta_id, cantidad_panes, recetas ( nombre ) ) ), pagos_cliente ( monto_efectivo, monto_transferencia )')
     .gte('fecha_pedido', inicio.toISOString())
     .lte('fecha_pedido', fin.toISOString())
     .order('fecha_pedido', { ascending: false })

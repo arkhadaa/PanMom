@@ -248,7 +248,14 @@ export default function App() {
       window.removeEventListener('pageshow', handlePageShow)
       window.removeEventListener('focus', handleVisibilityChange)
     }
-  }, [cargarPedidos, cargarProduccion, cargarGastos, cargarRetiros, cargarCajaHoy])
+  }, [usuarioActual?.rol, cargarPedidos, cargarProduccion, cargarGastos, cargarRetiros, cargarCajaHoy])
+
+  // Escuchar eventos globales para atajos de navegación
+  useEffect(() => {
+    const handleCambioTab = (e) => setTabActivo(e.detail)
+    window.addEventListener('cambiarTab', handleCambioTab)
+    return () => window.removeEventListener('cambiarTab', handleCambioTab)
+  }, [])
 
   const forzarRecarga = () => {
     mostrarToast('🔄 Actualizando...')
@@ -391,7 +398,17 @@ export default function App() {
           />
         )}
 
-        {tabActivo === 'agregar' && (
+        {tabActivo === 'agregar' && usuarioActual?.rol === 'productor' && (
+          <div className="p-4 safe-bottom max-w-lg mx-auto">
+            <div className="mb-4 text-center">
+              <h2 className="text-xl font-bold text-gray-800">Agregar Compras</h2>
+              <p className="text-sm text-gray-500">Registra las materias primas que compraste</p>
+            </div>
+            <Insumos />
+          </div>
+        )}
+
+        {tabActivo === 'agregar' && usuarioActual?.rol !== 'productor' && (
           <AgregarPedido
             pedidos={pedidos}
             produccion={produccion}
@@ -426,7 +443,7 @@ export default function App() {
 
         {tabActivo === 'finanzas' && usuarioActual?.rol === 'superadmin' && (
           <Finanzas
-            cajaFisica={cajaHoy.caja_efectivo_final}
+            cajaHoy={cajaHoy}
             usuarioActual={usuarioActual}
           />
         )}
@@ -450,7 +467,7 @@ export default function App() {
           <div className="p-4 pb-0 max-w-lg mx-auto">
             <div className="flex gap-2 mb-4">
               {[
-                { id: 'insumos', label: '🧂 Insumos' },
+                { id: 'insumos', label: '🧂 Costos/Insumos' },
                 { id: 'recetas', label: '📋 Recetas' },
               ].map(({ id, label }) => (
                 <button

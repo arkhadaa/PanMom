@@ -61,9 +61,9 @@ export default function HistorialCierres() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-gray-400 uppercase tracking-wide font-bold mb-0.5">Caja Final</p>
-                    <p className={`font-extrabold text-lg leading-none ${cierre.caja_final >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatearPesos(cierre.caja_final)}
+                    <p className="text-xs text-gray-400 uppercase tracking-wide font-bold mb-0.5">Ventas Totales</p>
+                    <p className="font-extrabold text-lg leading-none text-emerald-400">
+                      {formatearPesos(cierre.total_ventas || 0)}
                     </p>
                   </div>
                 </div>
@@ -72,24 +72,36 @@ export default function HistorialCierres() {
                 <div className="p-4 bg-white space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-green-50 rounded-xl px-3 py-2.5">
-                      <p className="text-xs font-bold text-green-600 uppercase tracking-wide mb-0.5">🛒 Ventas del día</p>
-                      <p className="font-extrabold text-gray-800">{formatearPesos(cierre.total_ingresos)}</p>
+                      <p className="text-[10px] font-bold text-green-600 uppercase tracking-wide mb-0.5">💵 Ingresos Efectivo</p>
+                      <p className="font-extrabold text-gray-800">{formatearPesos(cierre.total_ingresos_efectivo || 0)}</p>
                     </div>
-                    {(cierre.total_cobros_deuda > 0) && (
-                      <div className="bg-blue-50 rounded-xl px-3 py-2.5">
-                        <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-0.5">💰 Cobros fiados</p>
-                        <p className="font-extrabold text-gray-800">{formatearPesos(cierre.total_cobros_deuda)}</p>
-                      </div>
-                    )}
+                    <div className="bg-blue-50 rounded-xl px-3 py-2.5">
+                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide mb-0.5">💳 Transferencias</p>
+                      <p className="font-extrabold text-gray-800">{formatearPesos(cierre.total_ingresos_transferencia || 0)}</p>
+                    </div>
                     <div className="bg-red-50 rounded-xl px-3 py-2.5">
-                      <p className="text-xs font-bold text-red-500 uppercase tracking-wide mb-0.5">📦 Salidas</p>
-                      <p className="font-extrabold text-gray-800">{formatearPesos((cierre.total_gastos || 0) + (cierre.total_retiros || 0))}</p>
+                      <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide mb-0.5">📦 Gastos</p>
+                      <p className="font-extrabold text-gray-800">-{formatearPesos(cierre.total_gastos || 0)}</p>
+                    </div>
+                    <div className="bg-red-50 rounded-xl px-3 py-2.5">
+                      <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide mb-0.5">💸 Retiros</p>
+                      <p className="font-extrabold text-gray-800">-{formatearPesos(cierre.total_retiros || 0)}</p>
                     </div>
                   </div>
-                  <div className="pt-2 border-t border-gray-100 flex items-center gap-2">
-                    <Package size={14} className="text-gray-400" />
-                    <span className="text-sm text-gray-600 font-medium">
-                      {cierre.total_pedidos} pedidos en el día
+                  
+                  {cierre.total_deuda_generada > 0 && (
+                    <div className="mt-2 bg-orange-50 rounded-xl px-3 py-2 flex justify-between items-center">
+                      <span className="text-[11px] font-bold text-orange-600 uppercase tracking-wide">⚠️ Fiados de ese día</span>
+                      <span className="font-black text-orange-600">{formatearPesos(cierre.total_deuda_generada)}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                    <span className="text-xs text-gray-800 font-extrabold uppercase tracking-wide flex items-center gap-1.5">
+                      📈 Efectivo Generado Hoy
+                    </span>
+                    <span className={`font-black text-lg ${((cierre.total_ingresos_efectivo || 0) - (cierre.total_gastos || 0) - (cierre.total_retiros || 0)) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {((cierre.total_ingresos_efectivo || 0) - (cierre.total_gastos || 0) - (cierre.total_retiros || 0)) > 0 ? '+' : ''}{formatearPesos((cierre.total_ingresos_efectivo || 0) - (cierre.total_gastos || 0) - (cierre.total_retiros || 0))}
                     </span>
                   </div>
                 </div>

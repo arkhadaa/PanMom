@@ -46,13 +46,22 @@ function TarjetaProducto({ producto, cantidad, onChange, colorTheme, stockDispon
       <div className="mt-auto flex flex-col gap-2">
         {/* Subtotal flotante */}
         {cantidad > 0 && (
-          <div className="text-right h-4">
+          <div className="text-right h-4 flex justify-between items-center">
+            <div className="flex gap-1">
+              <button onClick={() => onChange(cantidad + 5)} className="text-[10px] bg-gray-100 hover:bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 font-bold transition-colors">+5</button>
+              <button onClick={() => onChange(cantidad + 10)} className="text-[10px] bg-gray-100 hover:bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 font-bold transition-colors">+10</button>
+            </div>
             <span className="text-xs font-bold text-green-600">
               {formatearPesos(subtotal)}
             </span>
           </div>
         )}
-        {!cantidad && <div className="h-4" />}
+        {!cantidad && (
+          <div className="h-4 flex gap-1">
+            <button onClick={() => onChange(cantidad + 5)} className="text-[10px] bg-gray-50 hover:bg-gray-100 px-1.5 py-0.5 rounded text-gray-400 font-bold transition-colors">+5</button>
+            <button onClick={() => onChange(cantidad + 10)} className="text-[10px] bg-gray-50 hover:bg-gray-100 px-1.5 py-0.5 rounded text-gray-400 font-bold transition-colors">+10</button>
+          </div>
+        )}
 
         {/* Controles */}
         <div className="flex items-center justify-between gap-1 w-full bg-white rounded-lg p-1 border border-gray-100 shadow-sm">
@@ -65,9 +74,17 @@ function TarjetaProducto({ producto, cantidad, onChange, colorTheme, stockDispon
             <Minus size={14} strokeWidth={2.5} />
           </button>
           
-          <span className={`w-6 text-center font-bold text-sm ${cantidad > 0 ? theme.textOn : 'text-gray-400'}`}>
-            {cantidad}
-          </span>
+          <input 
+            type="number"
+            min="0"
+            value={cantidad === 0 ? '' : cantidad}
+            onChange={(e) => {
+              const val = parseInt(e.target.value)
+              onChange(isNaN(val) ? 0 : val)
+            }}
+            placeholder="0"
+            className={`w-8 text-center font-bold text-sm bg-transparent outline-none p-0 border-0 ${cantidad > 0 ? theme.textOn : 'text-gray-400 placeholder:text-gray-300'}`}
+          />
           
           <button
             type="button"

@@ -85,7 +85,7 @@ export async function obtenerFlujoSemanal() {
   // 4. Pagos de clientes (todo ingreso de dinero ahora entra por aquí)
   const { data: pagos } = await supabase
     .from('pagos_cliente')
-    .select('monto_efectivo, monto_transferencia')
+    .select('monto_efectivo, monto_transferencia, pedidos(fecha_pedido)')
     .gte('fecha', inicio.toISOString())
     .lte('fecha', fin.toISOString())
 
@@ -96,6 +96,14 @@ export async function obtenerFlujoSemanal() {
   // Ingresos reales = todos los pagos registrados en pagos_cliente en la semana
   const totalIngresos = (pagos || []).reduce((s, p) => s + (p.monto_efectivo || 0) + (p.monto_transferencia || 0), 0)
 
+  // Deudas cobradas = pagos donde el pedido asociado es anterior a esta semana
+  const deudasCobradas = (pagos || []).reduce((s, p) => {
+    if (p.pedidos && new Date(p.pedidos.fecha_pedido) < inicio) {
+      return s + (p.monto_efectivo || 0) + (p.monto_transferencia || 0)
+    }
+    return s
+  }, 0)
+
   const totalGastos = (gastos || []).reduce((s, g) => s + (g.monto || 0), 0)
   const totalRetiros = (retiros || []).reduce((s, r) => s + (r.monto || 0), 0)
 
@@ -104,6 +112,7 @@ export async function obtenerFlujoSemanal() {
   return {
     ventas,
     ingresos: totalIngresos,
+    deudasCobradas,
     gastos: totalGastos,
     retiros: totalRetiros,
     disponible: disponibleSemana

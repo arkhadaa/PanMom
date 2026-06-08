@@ -1,43 +1,43 @@
 import { useState, useEffect, useMemo } from 'react'
-import { DollarSign, Wallet, TrendingUp, TrendingDown, Users, AlertCircle, ShoppingBag, Receipt } from 'lucide-react'
-import { formatearPesos, obtenerFlujoSemanal, obtenerRetirosMensuales, listarCuentasClientes, listarRecetas, calcularCostoReceta } from '../services/supabaseClient'
+import { DollarSign, Wallet, TrendingUp, TrendingDown, Users, AlertCircle, ShoppingBag, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react'
+import { formatearPesos, obtenerFlujoSemanal, obtenerRetirosMensuales, listarCuentasClientes, obtenerInversionInsumosMes } from '../services/supabaseClient'
 
-export default function Finanzas({ cajaFisica = 0, usuarioActual }) {
+export default function Finanzas({ cajaHoy = {}, usuarioActual }) {
+  const cajaFisica = cajaHoy.caja_efectivo_final || 0
+  const debitoEsperado = cajaHoy.ingresos_transferencia || 0
+  const totalEsperado = cajaFisica + debitoEsperado
   const [flujoSemana, setFlujoSemana] = useState(null)
   const [retirosMes, setRetirosMes] = useState(null)
+  const [inversionInsumos, setInversionInsumos] = useState({ total: 0, compras: [] })
   const [topDeudores, setTopDeudores] = useState([])
   const [totalDeuda, setTotalDeuda] = useState(0)
-  const [margenes, setMargenes] = useState([])
   const [cargando, setCargando] = useState(true)
+
+  // Estados para Cuadratura
+  const [efectivoReal, setEfectivoReal] = useState('')
+  const [debitoReal, setDebitoReal] = useState('')
+
+  // Estados de acordeones
+  const [mostrarAnalisis, setMostrarAnalisis] = useState(false)
 
   useEffect(() => {
     async function cargar() {
       setCargando(true)
       try {
-        const [flujo, retiros, cuentas, recetas] = await Promise.all([
+        const [flujo, retiros, cuentas, inversion] = await Promise.all([
           obtenerFlujoSemanal(),
           obtenerRetirosMensuales(),
           listarCuentasClientes(),
-          listarRecetas().catch(() => [])
+          obtenerInversionInsumosMes().catch(() => ({ total: 0, compras: [] }))
         ])
         
         setFlujoSemana(flujo)
         setRetirosMes(retiros)
+        setInversionInsumos(inversion)
         
         const adeudados = cuentas.filter(c => c.saldo > 0)
         setTotalDeuda(adeudados.reduce((acc, c) => acc + c.saldo, 0))
         setTopDeudores(adeudados.slice(0, 3)) // Top 3
-
-        const calculosMargen = (recetas || []).map(r => {
-          const { costoCarga } = calcularCostoReceta(r)
-          const panes = r.panes_por_carga || 1
-          const costoUnidad = Math.round(costoCarga / panes)
-          const precioVenta = r.precio_venta || 0
-          const margen = precioVenta - costoUnidad
-          return { nombre: r.nombre, costo: costoUnidad, venta: precioVenta, margen }
-        }).sort((a, b) => b.margen - a.margen)
-        
-        setMargenes(calculosMargen)
 
       } catch (err) {
         console.error('Error cargando finanzas:', err)
@@ -67,7 +67,7 @@ export default function Finanzas({ cajaFisica = 0, usuarioActual }) {
           🏦 Capital del Negocio
         </h3>
         <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-5 text-white shadow-md">
-          <p className="text-sm font-semibold opacity-90 mb-1">Capital Teórico Neto</p>
+          <p className="text-sm font-semibold opacity-90 mb-1">Capital Actual</p>
           <p className="text-4xl font-black mb-4">{formatearPesos(capitalTeorico)}</p>
           
           <div className="grid grid-cols-2 gap-4 border-t border-white/20 pt-4 mt-2">
@@ -80,6 +80,102 @@ export default function Finanzas({ cajaFisica = 0, usuarioActual }) {
               <p className="text-xs opacity-80 font-medium">Plata en la Calle (Fíados)</p>
               <p className="text-lg font-bold">{formatearPesos(totalDeuda)}</p>
               <p className="text-[10px] opacity-70 mt-0.5">Dinero pendiente de cobro</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── BLOQUE: VERIFICACIÓN DE CAJA ── */}
+      <section>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+          💰 Verificación de Caja
+        </h3>
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm p-4 space-y-4">
+          
+          {/* NIVEL 1: TOTALES */}
+          <div className="flex justify-between items-center text-center">
+            <div className="flex-1">
+              <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">App dice</p>
+              <p className="font-bold text-gray-800 text-xl">{formatearPesos(totalEsperado)}</p>
+            </div>
+            <div className="px-2 text-gray-300">
+              <ChevronRight size={20} />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] uppercase font-bold text-blue-500 mb-1">Realmente hay</p>
+              <p className="font-black text-blue-600 text-2xl">
+                {formatearPesos((Number(efectivoReal) || 0) + (Number(debitoReal) || 0))}
+              </p>
+            </div>
+          </div>
+
+          {/* DIFERENCIA */}
+          <div className="pt-3 border-t-2 border-dashed border-gray-200">
+            {(() => {
+              if (efectivoReal === '' && debitoReal === '') {
+                return <p className="text-sm text-gray-400 text-center italic">Ingresa tus montos abajo para calcular.</p>
+              }
+              const totalR = (Number(efectivoReal) || 0) + (Number(debitoReal) || 0)
+              const diff = totalR - totalEsperado
+              if (diff === 0) {
+                return (
+                  <div className="flex justify-between items-center text-green-600 bg-green-50 p-2.5 rounded-xl">
+                    <span className="font-bold text-sm uppercase tracking-wide">Diferencia:</span>
+                    <span className="font-black text-lg">$0 (Cuadrado ✅)</span>
+                  </div>
+                )
+              }
+              const sobra = diff > 0
+              return (
+                <div className={`flex justify-between items-center p-2.5 rounded-xl ${sobra ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'}`}>
+                  <span className="font-bold text-sm uppercase tracking-wide">Diferencia:</span>
+                  <span className="font-black text-lg">
+                    {sobra ? '+' : ''}{formatearPesos(diff)} {sobra ? '🎉' : '⚠️'}
+                  </span>
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* NIVEL 2: DETALLES */}
+          <div className="pt-4 border-t border-gray-100">
+            <p className="text-[10px] uppercase font-bold text-gray-400 mb-3">Detalle de Ingreso</p>
+            <div className="grid grid-cols-2 gap-4">
+              {/* App Esperaba */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-2">App esperaba</p>
+                <div className="space-y-1 text-xs text-gray-500">
+                  <div className="flex justify-between"><span className="opacity-70">Efectivo:</span> <span className="font-semibold">{formatearPesos(cajaFisica)}</span></div>
+                  <div className="flex justify-between"><span className="opacity-70">Débito:</span> <span className="font-semibold">{formatearPesos(debitoEsperado)}</span></div>
+                </div>
+              </div>
+              
+              {/* Yo Conté */}
+              <div>
+                <p className="text-xs font-semibold text-gray-800 mb-2">Yo conté</p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase text-gray-400 w-14">Efectivo</span>
+                    <input 
+                      type="number" 
+                      value={efectivoReal} 
+                      onChange={e => setEfectivoReal(e.target.value)} 
+                      className="input-field !py-1 !px-2 text-xs w-full font-semibold" 
+                      placeholder="Ej. 60000" 
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase text-gray-400 w-14">Débito</span>
+                    <input 
+                      type="number" 
+                      value={debitoReal} 
+                      onChange={e => setDebitoReal(e.target.value)} 
+                      className="input-field !py-1 !px-2 text-xs w-full font-semibold" 
+                      placeholder="Ej. 4200" 
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -108,124 +204,79 @@ export default function Finanzas({ cajaFisica = 0, usuarioActual }) {
         </section>
       )}
 
-      {/* ── BLOQUE C: FLUJO SEMANAL ── */}
-      <section>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-          📊 Flujo Semanal (Lun - Dom)
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="card !p-3">
-            <div className="flex items-center gap-1.5 text-gray-500 mb-1">
-              <ShoppingBag size={14} /> <span className="text-xs font-semibold">Ventas Totales</span>
-            </div>
-            <p className="text-lg font-bold text-gray-800">{formatearPesos(flujoSemana?.ventas)}</p>
+      {/* ── BLOQUE C: ANÁLISIS SEMANAL (EXPANDIBLE) ── */}
+      <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <button 
+          onClick={() => setMostrarAnalisis(!mostrarAnalisis)}
+          className="w-full flex justify-between items-center p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <TrendingUp size={18} className="text-indigo-500" />
+            <span className="font-bold text-gray-800">Ver análisis semanal</span>
           </div>
-          <div className="card !p-3 bg-green-50 border-green-100">
-            <div className="flex items-center gap-1.5 text-green-700 mb-1">
-              <DollarSign size={14} /> <span className="text-xs font-semibold">Ingresos Reales</span>
-            </div>
-            <p className="text-lg font-bold text-green-700">{formatearPesos(flujoSemana?.ingresos)}</p>
-          </div>
-          <div className="card !p-3 bg-red-50 border-red-100">
-            <div className="flex items-center gap-1.5 text-red-700 mb-1">
-              <TrendingDown size={14} /> <span className="text-xs font-semibold">Gastos</span>
-            </div>
-            <p className="text-lg font-bold text-red-700">{formatearPesos(flujoSemana?.gastos)}</p>
-          </div>
-          <div className="card !p-3 bg-orange-50 border-orange-100">
-            <div className="flex items-center gap-1.5 text-orange-700 mb-1">
-              <Wallet size={14} /> <span className="text-xs font-semibold">Retiros</span>
-            </div>
-            <p className="text-lg font-bold text-orange-700">{formatearPesos(flujoSemana?.retiros)}</p>
-          </div>
-        </div>
-        <div className="mt-2 bg-gray-800 rounded-xl p-3 flex justify-between items-center text-white">
-          <span className="text-sm font-semibold">Disponible Neto (Semana)</span>
-          <span className="text-xl font-bold">{formatearPesos(flujoSemana?.disponible)}</span>
-        </div>
-      </section>
-
-      {/* ── BLOQUE D: RESUMEN MENSUAL DE RETIROS ── */}
-      <section>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-          💸 Distribución de Retiros (Mes Actual)
-        </h3>
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <p className="text-sm text-gray-500 mb-3">Total retirado este mes: <b className="text-gray-800">{formatearPesos(retirosMes?.totalMensual)}</b></p>
-          
-          <div className="space-y-3 mb-5">
-            {retirosMes?.resumen.map(r => (
-              <div key={r.usuario} className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <Users size={16} className="text-orange-400" />
-                  <span className="font-semibold text-gray-700">{r.usuario}</span>
-                </div>
-                <span className="font-bold">{formatearPesos(r.total)}</span>
+          {mostrarAnalisis ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+        </button>
+        
+        {mostrarAnalisis && (
+          <div className="p-4 border-t border-gray-200 space-y-5">
+            
+            {/* Flujo Compacto */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Ventas Totales</span>
+                <span className="font-semibold">{formatearPesos(flujoSemana?.ventas)}</span>
               </div>
-            ))}
-            {retirosMes?.resumen.length === 0 && (
-              <p className="text-xs text-gray-400 text-center italic">Nadie ha retirado plata este mes.</p>
-            )}
-          </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Ingresos Reales</span>
+                <span className="font-semibold text-green-600">{formatearPesos(flujoSemana?.ingresos)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400 ml-4 border-l-2 pl-2 border-green-200 text-xs">↳ Deudas cobradas</span>
+                <span className="font-semibold text-emerald-600 text-xs">{formatearPesos(flujoSemana?.deudasCobradas)}</span>
+              </div>
+              <div className="flex justify-between text-sm pt-1">
+                <span className="text-gray-600">Gastos</span>
+                <span className="font-semibold text-red-500">− {formatearPesos(flujoSemana?.gastos)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Retiros</span>
+                <span className="font-semibold text-orange-500">− {formatearPesos(flujoSemana?.retiros)}</span>
+              </div>
+            </div>
 
-          <h4 className="text-[10px] font-bold uppercase text-gray-400 mb-2 border-t pt-3">Últimos movimientos</h4>
-          <div className="space-y-2">
-            {retirosMes?.ultimos.map(r => {
-              const fecha = new Date(r.fecha).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })
-              return (
-                <div key={r.id} className="flex justify-between text-xs items-center bg-gray-50 rounded-lg p-2">
-                  <div className="flex gap-2 text-gray-600">
-                    <span className="font-semibold">{fecha}</span>
-                    <span>-</span>
-                    <span className="font-bold">{r.usuario}</span>
-                    {r.descripcion && <span className="text-gray-400">({r.descripcion})</span>}
+            <div className="bg-gray-800 rounded-xl p-3 text-white">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm font-bold">📈 Resultado Semanal</span>
+                <span className="text-xl font-black">{formatearPesos(flujoSemana?.disponible)}</span>
+              </div>
+              <p className="text-[10px] text-gray-300 uppercase tracking-wide">
+                Plata limpia a favor (Ingresos reales − Gastos − Retiros)
+              </p>
+            </div>
+
+            {/* Historial de Retiros movido aquí adentro */}
+            <div className="pt-4 border-t border-gray-100">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                💸 Distribución de Retiros
+              </p>
+              <div className="space-y-3 mb-4">
+                {retirosMes?.resumen.map(r => (
+                  <div key={r.usuario} className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Users size={14} className="text-orange-400" />
+                      <span className="font-semibold text-gray-700 text-sm">{r.usuario}</span>
+                    </div>
+                    <span className="font-bold text-sm">{formatearPesos(r.total)}</span>
                   </div>
-                  <span className="font-bold text-gray-700">{formatearPesos(r.monto)}</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
+                ))}
+                {retirosMes?.resumen.length === 0 && (
+                  <p className="text-xs text-gray-400 italic">Sin retiros este mes.</p>
+                )}
+              </div>
+            </div>
 
-      {/* ── BLOQUE E: MARGEN ESTIMADO POR PRODUCTO ── */}
-      <section>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-          📈 Margen Estimado (Por unidad)
-        </h3>
-        <p className="text-xs text-gray-500 mb-3 leading-tight">
-          Calculado en base a receta. Solo incluye ingredientes, no considera luz, agua ni gastos operacionales.
-        </p>
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
-              <tr>
-                <th className="px-3 py-2 font-semibold">Producto</th>
-                <th className="px-3 py-2 font-semibold text-right">Costo</th>
-                <th className="px-3 py-2 font-semibold text-right">Venta</th>
-                <th className="px-3 py-2 font-semibold text-right">Margen</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {margenes.length === 0 ? (
-                <tr>
-                  <td colSpan="4" className="px-3 py-4 text-center text-xs text-gray-400">
-                    Calculando márgenes...
-                  </td>
-                </tr>
-              ) : (
-                margenes.map((m, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-3 py-2 font-medium text-gray-800">{m.nombre}</td>
-                    <td className="px-3 py-2 text-right text-red-600 font-semibold">{formatearPesos(m.costo)}</td>
-                    <td className="px-3 py-2 text-right text-green-600 font-semibold">{formatearPesos(m.venta)}</td>
-                    <td className="px-3 py-2 text-right text-indigo-600 font-bold">{formatearPesos(m.margen)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+          </div>
+        )}
       </section>
 
     </div>

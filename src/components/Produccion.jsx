@@ -93,7 +93,8 @@ export default function Produccion({ onProduccionRegistrada }) {
 
   // Form
   const [recetaId, setRecetaId] = useState('')
-  const [cargas, setCargas]     = useState(1)
+  const [cargasInput, setCargasInput] = useState(1)
+  const [modoInput, setModoInput] = useState('carga') // 'carga' o 'unidad'
   const [guardando, setGuard]   = useState(false)
   const [exito, setExito]       = useState(false)
 
@@ -115,17 +116,25 @@ export default function Produccion({ onProduccionRegistrada }) {
 
   // Receta seleccionada + preview de costos
   const recetaSel = recetas.find(r => r.id === Number(recetaId))
+  const panesPorCarga = recetaSel?.panes_por_carga || 1
+  
+  // Calcular las cargas reales que se enviarán a BD
+  const cargasReales = modoInput === 'unidad' 
+    ? (cargasInput / panesPorCarga) 
+    : cargasInput
+
   const preview   = recetaSel ? calcularCostoReceta(recetaSel) : null
-  const panesEst  = recetaSel ? cargas * recetaSel.panes_por_carga : 0
-  const costoEst  = preview   ? cargas * preview.costoCarga        : 0
-  const ingresoEst = preview  ? cargas * preview.ingresoCarga      : 0
+  const panesEst  = recetaSel ? (modoInput === 'unidad' ? cargasInput : cargasInput * panesPorCarga) : 0
+  const costoEst  = preview   ? cargasReales * preview.costoCarga        : 0
+  const ingresoEst = preview  ? cargasReales * preview.ingresoCarga      : 0
 
   const handleRegistrar = async () => {
-    if (!recetaId || cargas < 1 || guardando) return
+    if (!recetaId || cargasInput < 1 || guardando) return
     setGuard(true)
     try {
-      await registrarProduccion({ receta_id: Number(recetaId), cargas })
-      setCargas(1)
+      await registrarProduccion({ receta_id: Number(recetaId), cargas: cargasReales })
+      setCargasInput(1)
+      setModoInput('carga')
       setExito(true)
       setTimeout(() => setExito(false), 2500)
       const [p] = await Promise.all([listarProduccionHoy()])
@@ -146,8 +155,8 @@ export default function Produccion({ onProduccionRegistrada }) {
   }
 
   // ── Ajustar cargas ──
-  const incrementar = () => setCargas(v => v + 1)
-  const decrementar = () => setCargas(v => Math.max(1, v - 1))
+  const incrementar = () => setCargasInput(v => v + 1)
+  const decrementar = () => setCargasInput(v => Math.max(1, v - 1))
 
   if (cargando) {
     return (
@@ -203,12 +212,28 @@ export default function Produccion({ onProduccionRegistrada }) {
           </select>
         </div>
 
-        {/* Contador de cargas */}
+        {/* Selector de unidad de medida */}
         <div>
-          <label className="input-label text-sm font-bold text-gray-600 uppercase tracking-wide">
-            Cargas a registrar
+          <label className="input-label text-sm font-bold text-gray-600 uppercase tracking-wide flex justify-between">
+            <span>Cantidad a registrar</span>
+            <div className="flex bg-gray-100 rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => setModoInput('carga')}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${modoInput === 'carga' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500'}`}
+              >
+                Por Carga
+              </button>
+              <button
+                type="button"
+                onClick={() => setModoInput('unidad')}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${modoInput === 'unidad' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500'}`}
+              >
+                Por Unidad
+              </button>
+            </div>
           </label>
-          <div className="flex items-center gap-3 mt-1">
+          <div className="flex items-center gap-3 mt-2">
             <button
               onClick={decrementar}
               className="w-14 h-14 rounded-2xl border-2 border-gray-200 bg-gray-50 flex items-center justify-center text-2xl font-bold text-gray-600 active:scale-95 transition-all flex-shrink-0"
@@ -216,8 +241,16 @@ export default function Produccion({ onProduccionRegistrada }) {
               −
             </button>
             <div className="flex-1 text-center">
-              <span className="text-5xl font-extrabold text-orange-500">{cargas}</span>
-              <p className="text-xs text-gray-400 mt-1">carga{cargas !== 1 ? 's' : ''}</p>
+              <input
+                type="number"
+                value={cargasInput}
+                onChange={e => setCargasInput(Number(e.target.value))}
+                className="w-full text-5xl font-extrabold text-orange-500 text-center bg-transparent focus:outline-none"
+                min={1}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                {modoInput === 'carga' ? `carga${cargasInput !== 1 ? 's' : ''}` : `unidad${cargasInput !== 1 ? 'es' : ''}`}
+              </p>
             </div>
             <button
               onClick={incrementar}
@@ -232,7 +265,7 @@ export default function Produccion({ onProduccionRegistrada }) {
         {recetaSel && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-1.5">
             <div className="flex justify-between text-sm">
-              <span className="text-amber-700">🍞 Panes estimados</span>
+              <span className="text-amber-700">🍞 Unidades estimadas</span>
               <strong className="text-amber-900">{panesEst}</strong>
             </div>
             <div className="flex justify-between text-sm">
@@ -249,7 +282,7 @@ export default function Produccion({ onProduccionRegistrada }) {
         {/* Botón registrar */}
         <button
           onClick={handleRegistrar}
-          disabled={!recetaId || cargas < 1 || guardando}
+          disabled={!recetaId || cargasInput < 1 || guardando}
           className="btn-primary w-full !py-4 text-base"
         >
           {guardando
