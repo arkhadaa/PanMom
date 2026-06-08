@@ -20,6 +20,7 @@ import Finanzas from './components/Finanzas'
 import Auditoria from './components/Auditoria'
 import Ventas from './components/Ventas'
 import SyncBadge from './components/SyncBadge'
+import { useSwipe } from './hooks/useSwipe'
 import {
   listarPedidosHoy,
   listarProduccionHoy,
@@ -338,8 +339,34 @@ export default function App() {
     setUsuarioActual(null)
   }
 
+  // ── Navegación por Gestos (Swipe) ──
+  const swipeTabs = ['dashboard', 'pedidos', 'agregar'];
+  if (['productor', 'superadmin'].includes(usuarioActual?.rol)) {
+    swipeTabs.push('produccion');
+  }
+  swipeTabs.push('deudas');
+
+  const { onTouchStart, onTouchEnd } = useSwipe({
+    onSwipeLeft: () => {
+      const idx = swipeTabs.indexOf(tabActivo);
+      if (idx !== -1 && idx < swipeTabs.length - 1) {
+        setTabActivo(swipeTabs[idx + 1]);
+      }
+    },
+    onSwipeRight: () => {
+      const idx = swipeTabs.indexOf(tabActivo);
+      if (idx !== -1 && idx > 0) {
+        setTabActivo(swipeTabs[idx - 1]);
+      }
+    }
+  });
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800 pb-20 md:pb-0">
+    <div 
+      className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800 pb-20 md:pb-0"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <Header 
         tabActivo={tabActivo} 
         setTabActivo={setTabActivo} 
