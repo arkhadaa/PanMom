@@ -11,9 +11,18 @@ import {
   crearPedido, listarProductos, formatearPesos, 
   listarTodosClientes, listarClientesFrecuentes, calcularStockHoy
 } from '../services/supabaseClient'
+import { useSyncQueue } from '../hooks/useSyncQueue'
 
 // ─── Tarjeta de producto (Grid) ───────────────────────────────────────────────
-function TarjetaProducto({ producto, cantidad, onChange, colorTheme, stockDisponible, tieneReceta, hayProduccionHoy }) {
+function TarjetaProducto({ producto, cantidad, onChange, colorTheme, stockDisponible, tieneReceta, hayProduccionHoy, autoFocus }) {
+  const inputRef = useRef(null)
+  
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [autoFocus])
+
   const inc = () => onChange(cantidad + 1)
   const dec = () => onChange(Math.max(0, cantidad - 1))
   const subtotal = cantidad * producto.precio_venta
@@ -75,6 +84,7 @@ function TarjetaProducto({ producto, cantidad, onChange, colorTheme, stockDispon
           </button>
           
           <input 
+            ref={inputRef}
             type="number"
             min="0"
             value={cantidad === 0 ? '' : cantidad}
@@ -103,17 +113,17 @@ function TarjetaProducto({ producto, cantidad, onChange, colorTheme, stockDispon
 export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioActual, produccion = [], pedidos = [] }) {
   const [productos, setProductos]   = useState([])
   const [cantidades, setCantidades] = useState({}) // { producto_id: cantidad }
-  const [nombreCliente, setNombre]  = useState('')
+  const [nombreCliente, setNombre]  = useState('Público General')
   // 'fiado' | 'efectivo' | 'transferencia' | 'mixto'
-  const [metodoPago, setMetodoPago] = useState('fiado')
+  const [metodoPago, setMetodoPago] = useState('efectivo')
   const [montoEfectivo, setMontoEfectivo] = useState('')
 
   const [horaEntrega, setHoraEntrega] = useState('')
   const [notas, setNotas]                 = useState('')
-  const [guardando, setGuardando]   = useState(false)
-  const [exito, setExito]           = useState(false)
-  const [error, setError]           = useState(null)
   const [cargandoProd, setCargProd] = useState(true)
+  
+  // Cola local para Optimistic UI
+  const [syncQueue, setSyncQueue] = useState([])
 
   const stockHoy = useMemo(
     () => calcularStockHoy(produccion, pedidos),
@@ -177,6 +187,7 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
       .filter(p => (cantidades[p.id] || 0) > 0)
       .map(p => ({
         producto_id:     p.id,
+        nombre:          p.nombre,
         cantidad:        cantidades[p.id],
         precio_unitario: p.precio_venta,
       })),
@@ -188,68 +199,51 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
 
   const esValido = nombreCliente.trim().length >= 2 && items.length > 0
 
+  const { enqueueTask } = useSyncQueue()
+
   const handleGuardar = async (e) => {
     e.preventDefault()
-    if (!esValido || guardando) return
-    setGuardando(true)
-    setError(null)
-    try {
-      let fecha_entrega = null
-      if (horaEntrega) {
-        const hoy = new Date()
-        const [h, m] = horaEntrega.split(':')
-        hoy.setHours(Number(h), Number(m), 0, 0)
-        fecha_entrega = hoy.toISOString()
-      }
-
-      const pedidoCreado = await crearPedido({
-        nombreCliente:  nombreCliente.trim(),
-        items,
-        metodoPago,
-        montoEfectivo: metodoPago === 'mixto' ? Number(montoEfectivo) : undefined,
-        fecha_entrega,
-        notas:          notas.trim() || null,
-        usuario:        usuarioActual?.nombre || 'sistema',
-      })
-      setExito(true)
-      setNombre('')
-      setCantidades({})
-      setMetodoPago('fiado')
-      setMontoEfectivo('')
-      setNotas('')
-      onPedidoCreado?.(pedidoCreado)
-      setTimeout(() => setExito(false), 2500)
-    } catch (err) {
-      console.error(err)
-      setError(err.message || 'Error al guardar el pedido.')
-    } finally {
-      setGuardando(false)
+    if (!esValido) return
+    
+    let fecha_entrega = null
+    if (horaEntrega) {
+      const hoy = new Date()
+      const [h, m] = horaEntrega.split(':')
+      hoy.setHours(Number(h), Number(m), 0, 0)
+      fecha_entrega = hoy.toISOString()
     }
+
+    const pedidoInfo = {
+      nombreCliente:  nombreCliente.trim(),
+      items,
+      metodoPago,
+      montoEfectivo: metodoPago === 'mixto' ? Number(montoEfectivo) : undefined,
+      fecha_entrega,
+      notas:          notas.trim() || null,
+      usuario:        usuarioActual?.nombre || 'sistema',
+    }
+
+    const descripcion = `${items.reduce((s, i) => s + i.cantidad, 0)} ítems · ${formatearPesos(totalMonto)}`
+
+    // 1. Agregar a la cola global (Persistent Offline-First)
+    await enqueueTask('PEDIDO', pedidoInfo, descripcion)
+
+    // 2. Limpiar el formulario instantáneamente
+    setNombre('Público General')
+    setCantidades({})
+    setMetodoPago('efectivo')
+    setMontoEfectivo('')
+    setNotas('')
   }
 
   return (
     <div className="p-4 safe-bottom max-w-lg mx-auto">
-      <div className="mb-5">
-        <h2 className="text-xl font-bold text-gray-800">Nuevo Pedido</h2>
-        <p className="text-sm text-gray-500">Selecciona productos y cliente</p>
+      <div className="mb-5 flex justify-between items-start">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Nuevo Pedido</h2>
+          <p className="text-sm text-gray-500">Optimizado para velocidad</p>
+        </div>
       </div>
-
-      {exito && (
-        <div className="mb-4 flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 animate-fade-up">
-          <CheckCircle size={20} className="text-green-500 flex-shrink-0" />
-          <div>
-            <p className="font-semibold text-green-800 text-sm">¡Pedido guardado!</p>
-            <p className="text-xs text-green-600">Se actualizó en tiempo real.</p>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <p className="text-sm font-semibold text-red-800">Error al guardar</p>
-          <p className="text-xs text-red-600 mt-0.5">{error}</p>
-        </div>
-      )}
 
       <form onSubmit={handleGuardar} className="space-y-4">
 
@@ -313,7 +307,7 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
                 const sandwiches = productos.filter(p => p.nombre.toLowerCase().match(/ave|aliado|mantequilla|membrillo|churrasco/))
                 const basicos = productos.filter(p => !ofertas.includes(p) && !bebidas.includes(p) && !sandwiches.includes(p))
 
-                const Seccion = ({ titulo, items, colorTheme }) => {
+                const Seccion = ({ titulo, items, colorTheme, isFirstSection }) => {
                   if (items.length === 0) return null
                   return (
                     <div>
@@ -321,7 +315,7 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
                         {titulo}
                       </h3>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {items.map(p => {
+                        {items.map((p, index) => {
                           const tieneReceta = !!(p.receta_id)
                           const stockDisponible = tieneReceta 
                             ? (stockPorReceta[p.receta_id] ?? null) 
@@ -336,6 +330,7 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
                               stockDisponible={stockDisponible}
                               tieneReceta={tieneReceta}
                               hayProduccionHoy={hayProduccionHoy}
+                              autoFocus={isFirstSection && index === 0}
                             />
                           )
                         })}
@@ -346,10 +341,10 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
 
                 return (
                   <>
-                    <Seccion titulo="🍞 Pan y Sopaipillas" items={basicos} colorTheme="basico" />
-                    <Seccion titulo="🥪 Sándwiches" items={sandwiches} colorTheme="sandwich" />
-                    <Seccion titulo="☕ Bebidas y Sopas" items={bebidas} colorTheme="bebida" />
-                    <Seccion titulo="🔥 Ofertas" items={ofertas} colorTheme="oferta" />
+                    <Seccion titulo="🍞 Pan y Sopaipillas" items={basicos} colorTheme="basico" isFirstSection={true} />
+                    <Seccion titulo="🥪 Sándwiches" items={sandwiches} colorTheme="sandwich" isFirstSection={false} />
+                    <Seccion titulo="☕ Bebidas y Sopas" items={bebidas} colorTheme="bebida" isFirstSection={false} />
+                    <Seccion titulo="🔥 Ofertas" items={ofertas} colorTheme="oferta" isFirstSection={false} />
                   </>
                 )
               })()}
@@ -582,20 +577,11 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
 
         <button
           type="submit"
-          disabled={!esValido || guardando}
-          className="btn-primary w-full !py-4 text-base mt-2"
+          disabled={!esValido}
+          className="btn-primary w-full !py-4 text-base mt-2 flex items-center justify-center gap-2"
         >
-          {guardando
-            ? <><Loader2 size={18} className="animate-spin" /> Guardando...</>
-            : <><Plus size={18} /> Guardar Pedido</>
-          }
+          <Plus size={18} /> Guardar Pedido
         </button>
-
-        {exito && (
-          <button type="button" onClick={onIrAPedidos} className="btn-secondary w-full">
-            Ver todos los pedidos →
-          </button>
-        )}
       </form>
     </div>
   )

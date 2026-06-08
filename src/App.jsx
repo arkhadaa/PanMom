@@ -18,6 +18,8 @@ import Deudas from './components/Deudas'
 import HistorialCierres from './components/HistorialCierres'
 import Finanzas from './components/Finanzas'
 import Auditoria from './components/Auditoria'
+import Ventas from './components/Ventas'
+import SyncBadge from './components/SyncBadge'
 import {
   listarPedidosHoy,
   listarProduccionHoy,
@@ -239,14 +241,18 @@ export default function App() {
       if (e.persisted || document.visibilityState === 'visible') refrescarSilencioso()
     }
 
+    const handleSync = () => refrescarSilencioso()
+
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('pageshow', handlePageShow)
     window.addEventListener('focus', handleVisibilityChange)
+    window.addEventListener('datosSincronizados', handleSync)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('pageshow', handlePageShow)
       window.removeEventListener('focus', handleVisibilityChange)
+      window.removeEventListener('datosSincronizados', handleSync)
     }
   }, [usuarioActual?.rol, cargarPedidos, cargarProduccion, cargarGastos, cargarRetiros, cargarCajaHoy])
 
@@ -341,6 +347,7 @@ export default function App() {
         usuarioActual={usuarioActual}
         onLogout={handleLogout}
       />
+      <SyncBadge />
 
       <main className="flex-1 w-full max-w-4xl mx-auto md:p-4">
         {tabActivo === 'dashboard' && (
@@ -439,6 +446,10 @@ export default function App() {
               if (usuarioActual?.rol === 'superadmin') cargarCostos()
             }}
           />
+        )}
+
+        {tabActivo === 'ventas' && ['productor', 'superadmin'].includes(usuarioActual?.rol) && (
+          <Ventas pedidos={pedidos} />
         )}
 
         {tabActivo === 'finanzas' && usuarioActual?.rol === 'superadmin' && (

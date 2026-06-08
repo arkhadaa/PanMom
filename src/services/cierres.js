@@ -23,14 +23,26 @@ export async function obtenerCajaHoy() {
 
   try {
     const [pagosRes, gastosRes, retirosRes, aperturaRes] = await Promise.all([
-      supabase.from('pagos_cliente').select('monto_efectivo, monto_transferencia').gte('fecha', isoInicio).lte('fecha', isoFin),
+      supabase.from('pagos_cliente').select('monto_efectivo, monto_transferencia, pedidos(fecha_pedido)').gte('fecha', isoInicio).lte('fecha', isoFin),
       supabase.from('gastos').select('monto').gte('fecha_gasto', isoInicio).lte('fecha_gasto', isoFin),
       supabase.from('retiros').select('monto').gte('fecha', isoInicio).lte('fecha', isoFin),
       supabase.from('aperturas_caja').select('monto').eq('fecha', fechaLocalStr).maybeSingle()
     ])
 
-    const ingresos_efectivo = (pagosRes.data || []).reduce((s, p) => s + (p.monto_efectivo || 0), 0)
-    const ingresos_transferencia = (pagosRes.data || []).reduce((s, p) => s + (p.monto_transferencia || 0), 0)
+    let ingresos_efectivo = 0
+    let ingresos_transferencia = 0
+    let cobros_atrasados = 0
+
+    ;(pagosRes.data || []).forEach(p => {
+      ingresos_efectivo += (p.monto_efectivo || 0)
+      ingresos_transferencia += (p.monto_transferencia || 0)
+      
+      const fechaPedido = p.pedidos?.fecha_pedido
+      if (fechaPedido && new Date(fechaPedido).getTime() < inicio.getTime()) {
+        cobros_atrasados += (p.monto_efectivo || 0) + (p.monto_transferencia || 0)
+      }
+    })
+
     const total_gastos = (gastosRes.data || []).reduce((s, g) => s + (g.monto || 0), 0)
     const total_retiros = (retirosRes.data || []).reduce((s, r) => s + (r.monto || 0), 0)
     const monto_apertura = aperturaRes.data?.monto || 0
@@ -43,6 +55,7 @@ export async function obtenerCajaHoy() {
       apertura_registrada,
       ingresos_efectivo,
       ingresos_transferencia,
+      cobros_atrasados,
       total_gastos,
       total_retiros,
       caja_efectivo_final

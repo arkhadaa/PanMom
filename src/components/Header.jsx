@@ -41,8 +41,10 @@ export default function Header({ tabActivo, setTabActivo, conectado, usuarioActu
   const verFinanzas = esSuperAdmin
   const verAuditoria = esProductor || esSuperAdmin
   const verHistorial = esSuperAdmin
+  const verVentas = esProductor || esSuperAdmin
 
   const tabsMenu = []
+  if (verVentas) tabsMenu.push({ id: 'ventas', label: 'Ventas', Icon: ShoppingBag })
   if (verFinanzas) tabsMenu.push({ id: 'finanzas', label: 'Finanzas', Icon: PieChart })
   if (verHistorial) tabsMenu.push({ id: 'historial', label: 'Cierres', Icon: Archive })
   if (verCostos) tabsMenu.push({ id: 'costos', label: 'Config', Icon: Package })

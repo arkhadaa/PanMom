@@ -5,6 +5,8 @@ import {
   X, CheckCircle, Lock
 } from 'lucide-react'
 import { formatearPesos, listarCuentasClientes, obtenerLimitesDiaNegocio, registrarCierreCaja } from '../services/supabaseClient'
+import ModalSimple from './ModalSimple'
+import { useSyncQueue } from '../hooks/useSyncQueue'
 
 // ─── Componentes Rápidos ──────────────────────────────────────────────
 function BotonAccion({ icon: Icon, label, colorCls, onClick }) {
@@ -19,53 +21,30 @@ function BotonAccion({ icon: Icon, label, colorCls, onClick }) {
   )
 }
 
-// ─── Modal Básico ────────────────────────────────────────────────────────────
-function ModalSimple({ titulo, isOpen, onClose, children }) {
-  if (!isOpen) return null
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 sm:p-0 bg-black/40 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white w-full sm:max-w-md rounded-2xl shadow-xl overflow-hidden animate-slide-up">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
-          <h3 className="font-bold text-gray-800">{titulo}</h3>
-          <button onClick={onClose} className="p-2 bg-gray-50 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="p-4">
-          {children}
-        </div>
-      </div>
-    </div>
-  )
-}
+
 
 // ─── Formulario de Movimiento Unificado ──────────────────────────────────────
-function FormMovimiento({ onRegistrarGasto, onRegistrarRetiro, onClose }) {
+function FormMovimiento({ onClose }) {
+  const { enqueueTask } = useSyncQueue()
   const [tipo, setTipo] = useState('Compra insumos')
   const [desc, setDesc] = useState('')
   const [monto, setMonto] = useState('')
-  const [cargando, setCarg] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     const v = Number(monto)
-    if (!v || v <= 0 || cargando) return
-    setCarg(true)
-    try {
-      if (tipo === 'Retiro personal') {
-        await onRegistrarRetiro({ monto: v, descripcion: desc.trim() || null })
-      } else {
-        const descFinal = desc.trim() ? `${tipo} - ${desc.trim()}` : tipo
-        await onRegistrarGasto({ monto: v, descripcion: descFinal })
-      }
-      setMonto('')
-      setDesc('')
-      onClose()
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setCarg(false)
-    }
+    if (!v || v <= 0) return
+
+    const descFinal = desc.trim() ? `${tipo} - ${desc.trim()}` : tipo
+    const type = tipo === 'Retiro personal' ? 'RETIRO' : 'GASTO'
+
+    // 1. Añadir a cola (usando el hook global)
+    await enqueueTask(type, { monto: v, descripcion: descFinal }, descFinal)
+
+    // 2. Cerrar instantáneamente
+    setMonto('')
+    setDesc('')
+    onClose()
   }
 
   return (
@@ -108,10 +87,10 @@ function FormMovimiento({ onRegistrarGasto, onRegistrarRetiro, onClose }) {
       </div>
       <button
         type="submit"
-        disabled={!monto || cargando}
+        disabled={!monto}
         className="w-full btn-primary py-3 flex items-center justify-center gap-2"
       >
-        {cargando ? <Loader2 size={18} className="animate-spin" /> : 'Guardar'}
+        Guardar
       </button>
     </form>
   )
@@ -121,7 +100,6 @@ function FormMovimiento({ onRegistrarGasto, onRegistrarRetiro, onClose }) {
 export default function Dashboard({
   pedidos, cajaHoy = { ingresos_efectivo: 0, ingresos_transferencia: 0, total_gastos: 0, total_retiros: 0, caja_efectivo_final: 0 },
   cargando, onRefresh,
-  onRegistrarGasto, onRegistrarRetiro,
   usuarioActual,
 }) {
   const [cuentas, setCuentas] = useState([])
@@ -132,6 +110,7 @@ export default function Dashboard({
   const [modalCierre, setModalCierre] = useState(false)
   const [cargandoCierre, setCargandoCierre] = useState(false)
   const [exitoCierre, setExitoCierre] = useState(false)
+
 
   // Cargar cuentas para deudas históricas
   const cargarDeudas = async () => {
@@ -381,6 +360,13 @@ export default function Dashboard({
 
             {/* Deuda histórica */}
             <div className="pt-4 border-t border-gray-100">
+              {cajaHoy.cobros_atrasados > 0 && (
+                <div className="flex justify-between items-center mb-3 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
+                  <span className="text-emerald-700 text-[11px] font-bold uppercase tracking-wide">Recuperado Hoy (Deudas Antiguas)</span>
+                  <span className="font-black text-emerald-600 text-lg">+{formatearPesos(cajaHoy.cobros_atrasados)}</span>
+                </div>
+              )}
+              
               <div className="flex justify-between items-center mb-3">
                 <span className="text-gray-600 text-sm">Deuda histórica pendiente</span>
                 <span className="font-bold text-red-500">{formatearPesos(statsHistorico.deudaHistoricaAtrasada)}</span>
@@ -434,8 +420,6 @@ export default function Dashboard({
     onClose={() => setModalGasto(false)}
   >
     <FormMovimiento
-      onRegistrarGasto={onRegistrarGasto}
-      onRegistrarRetiro={onRegistrarRetiro}
       onClose={() => setModalGasto(false)}
     />
   </ModalSimple>
