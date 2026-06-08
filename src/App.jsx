@@ -19,7 +19,6 @@ import HistorialCierres from './components/HistorialCierres'
 import Finanzas from './components/Finanzas'
 import Auditoria from './components/Auditoria'
 import Ventas from './components/Ventas'
-import SyncBadge from './components/SyncBadge'
 import { useSwipe } from './hooks/useSwipe'
 import {
   listarPedidosHoy,
@@ -132,6 +131,8 @@ export default function App() {
   const [costos, setCostos]         = useState(null)
   const [tabCostos, setTabCostos]   = useState('insumos')
 
+  const [animacionSlide, setAnimacionSlide] = useState('animate-fade-in')
+
   // ── Navegación por Gestos (Swipe) ──
   const swipeTabs = ['dashboard', 'pedidos', 'agregar'];
   if (['productor', 'superadmin'].includes(usuarioActual?.rol)) {
@@ -139,17 +140,35 @@ export default function App() {
   }
   swipeTabs.push('deudas');
 
+  const cambiarTabConAnimacion = (nuevoTab) => {
+    const oldIdx = swipeTabs.indexOf(tabActivo)
+    const newIdx = swipeTabs.indexOf(nuevoTab)
+
+    if (oldIdx !== -1 && newIdx !== -1) {
+      if (newIdx > oldIdx) setAnimacionSlide('animate-slide-right') // Entra desde la derecha
+      else if (newIdx < oldIdx) setAnimacionSlide('animate-slide-left') // Entra desde la izquierda
+    } else {
+      setAnimacionSlide('animate-fade-in')
+    }
+
+    // Pequeño hack para forzar re-render de la animación si el usuario cambia a otra pestaña rápidamente
+    setAnimacionSlide(prev => prev + ' ')
+    setTimeout(() => setAnimacionSlide(prev => prev.trim()), 10)
+
+    setTabActivo(nuevoTab)
+  }
+
   const { onTouchStart, onTouchEnd } = useSwipe({
     onSwipeLeft: () => {
       const idx = swipeTabs.indexOf(tabActivo);
       if (idx !== -1 && idx < swipeTabs.length - 1) {
-        setTabActivo(swipeTabs[idx + 1]);
+        cambiarTabConAnimacion(swipeTabs[idx + 1]);
       }
     },
     onSwipeRight: () => {
       const idx = swipeTabs.indexOf(tabActivo);
       if (idx !== -1 && idx > 0) {
-        setTabActivo(swipeTabs[idx - 1]);
+        cambiarTabConAnimacion(swipeTabs[idx - 1]);
       }
     }
   });
@@ -369,14 +388,13 @@ export default function App() {
     >
       <Header 
         tabActivo={tabActivo} 
-        setTabActivo={setTabActivo} 
+        setTabActivo={cambiarTabConAnimacion} 
         conectado={conectado} 
         usuarioActual={usuarioActual}
         onLogout={handleLogout}
       />
-      <SyncBadge />
 
-      <main className="flex-1 w-full max-w-4xl mx-auto md:p-4">
+      <main key={tabActivo} className={`flex-1 w-full max-w-4xl mx-auto md:p-4 ${animacionSlide}`}>
         {tabActivo === 'dashboard' && (
           <Dashboard
             pedidos={pedidos}
@@ -432,17 +450,7 @@ export default function App() {
           />
         )}
 
-        {tabActivo === 'agregar' && usuarioActual?.rol === 'productor' && (
-          <div className="p-4 safe-bottom max-w-lg mx-auto">
-            <div className="mb-4 text-center">
-              <h2 className="text-xl font-bold text-gray-800">Agregar Compras</h2>
-              <p className="text-sm text-gray-500">Registra las materias primas que compraste</p>
-            </div>
-            <Insumos />
-          </div>
-        )}
-
-        {tabActivo === 'agregar' && usuarioActual?.rol !== 'productor' && (
+        {tabActivo === 'agregar' && (
           <AgregarPedido
             pedidos={pedidos}
             produccion={produccion}

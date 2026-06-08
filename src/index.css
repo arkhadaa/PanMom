@@ -403,12 +403,30 @@
   }
 }
 
+@keyframes slideInFromRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInFromLeft {
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 .animate-fade-up {
   animation: fadeInUp 0.3s ease forwards;
 }
 
 .animate-slide-in {
   animation: slideIn 0.25s ease forwards;
+}
+
+.animate-slide-right {
+  animation: slideInFromRight 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.animate-slide-left {
+  animation: slideInFromLeft 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
 /* Modal overlay */
@@ -486,7 +504,7 @@
   border-top: 1px solid var(--color-gray-200);
   display: flex;
   z-index: 40;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
 }
 
 .bottom-nav-item {

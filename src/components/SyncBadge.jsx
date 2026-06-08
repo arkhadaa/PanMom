@@ -17,8 +17,8 @@ export default function SyncBadge() {
   // Si está vacío y sin errores
   if (queue.length === 0) {
     return (
-      <div className="flex items-center justify-center py-1">
-        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+      <div className="flex items-center justify-center">
+        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-white/80">
           <Cloud className="w-3.5 h-3.5" /> Sincronizado
         </span>
       </div>
@@ -27,23 +27,23 @@ export default function SyncBadge() {
 
   return (
     <>
-      <div className="flex justify-center py-1">
+      <div className="flex justify-center">
         <button
           onClick={() => setModalOpen(true)}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all active:scale-95 shadow-sm border ${
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all active:scale-95 shadow-sm border ${
             hasErrors 
               ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
               : isSyncing
-              ? 'bg-amber-50 text-amber-600 border-amber-200'
-              : 'bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200'
+              ? 'bg-white/20 text-white border-white/30'
+              : 'bg-white text-orange-600 border-orange-200 hover:bg-orange-50'
           }`}
         >
           {hasErrors ? (
-            <><AlertCircle size={14} /> Error de red ({errorTasks.length})</>
+            <><AlertCircle size={12} /> Error de red ({errorTasks.length})</>
           ) : isSyncing ? (
-            <><Loader2 size={14} className="animate-spin" /> Guardando...</>
+            <><Loader2 size={12} className="animate-spin" /> Guardando...</>
           ) : (
-            <><CloudOff size={14} /> {pendingTasks.length} pendientes</>
+            <><CloudOff size={12} /> {pendingTasks.length} pendientes</>
           )}
         </button>
       </div>

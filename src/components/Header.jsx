@@ -5,6 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Menu, ShoppingBag, LayoutDashboard, ClipboardList, PlusCircle, Package, ChefHat, Wifi, WifiOff, CreditCard, Archive, ShieldCheck, PieChart } from 'lucide-react'
+import SyncBadge from './SyncBadge'
 
 // Tabs de la barra principal (5 max)
 const TABS_PRINCIPALES = [
@@ -107,6 +108,8 @@ export default function Header({ tabActivo, setTabActivo, conectado, usuarioActu
           </div>
 
           <div className="flex items-center gap-1.5">
+            <SyncBadge />
+
             {conectado ? (
               <div className="flex items-center gap-1 bg-white/15 rounded-full px-2.5 py-1">
                 <Wifi size={12} className="text-green-300" />

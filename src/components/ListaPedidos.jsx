@@ -22,6 +22,7 @@ import {
   Loader2,
   AlertTriangle,
   RefreshCw,
+  Calendar,
 } from 'lucide-react'
 import {
   actualizarEstado,
@@ -466,13 +467,18 @@ export default function ListaPedidos({ pedidos, cargando, onPedidosActualizar, u
             value={fechaFiltro}
             onChange={e => setFechaFiltro(e.target.value)}
             max={new Date().toISOString().split('T')[0]}
-            className={`input-field !py-2.5 !pl-3 ${fechaFiltro ? '!pr-8' : '!pr-3'} text-sm text-gray-800 bg-white h-full min-h-[42px] max-w-[140px] md:max-w-none`}
-            style={{ color: '#292524' }} // Force color for iOS Safari bug
+            className={`input-field !py-2.5 !pl-3 ${fechaFiltro ? '!pr-8' : '!pr-3'} text-sm text-gray-800 bg-white h-full min-h-[42px] min-w-[130px] md:max-w-none relative z-10 ${!fechaFiltro ? 'opacity-0' : 'opacity-100'}`}
           />
+          {!fechaFiltro && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-gray-500 gap-1.5 border border-gray-200 rounded-lg bg-white shadow-sm z-0">
+              <Calendar size={15} />
+              <span className="text-sm font-medium">Fecha</span>
+            </div>
+          )}
           {fechaFiltro && (
             <button 
               onClick={() => setFechaFiltro('')}
-              className="absolute right-2 text-gray-400 hover:text-red-500 bg-white rounded-full p-0.5"
+              className="absolute right-2 text-gray-400 hover:text-red-500 bg-white rounded-full p-0.5 z-20"
               title="Volver a los pedidos de hoy"
             >
               <XCircle size={16} className="fill-white" />
