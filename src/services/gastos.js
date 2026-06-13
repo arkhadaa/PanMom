@@ -6,16 +6,21 @@
 import { supabase } from './supabase'
 import { obtenerLimitesDiaNegocio } from './helpers'
 
-/** Registra un gasto del día. */
-export async function registrarGasto({ descripcion, monto, usuario }) {
+/** Registra un gasto del día o histórico. */
+export async function registrarGasto({ descripcion, monto, usuario, insumo_id, metodo_pago, fecha_operacion }) {
+  const insertData = {
+    descripcion: descripcion?.trim() || 'Gasto',
+    monto:       Number(monto) || 0,
+    usuario:     usuario || 'sistema',
+    insumo_id:   insumo_id || null,
+    metodo_pago: metodo_pago || 'efectivo',
+    fecha_operacion: fecha_operacion ? new Date(fecha_operacion).toISOString() : new Date().toISOString(),
+    fecha_gasto: fecha_operacion ? new Date(fecha_operacion).toISOString() : new Date().toISOString(), // Mantenemos por retrocompatibilidad
+  }
+
   const { data, error } = await supabase
     .from('gastos')
-    .insert({
-      descripcion: descripcion.trim(),
-      monto:       Math.round(Number(monto) || 0),
-      fecha_gasto: new Date().toISOString(),
-      usuario:     usuario || 'sistema',
-    })
+    .insert(insertData)
     .select()
     .single()
   if (error) throw error

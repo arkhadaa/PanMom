@@ -45,8 +45,20 @@ export async function obtenerCajaHoy() {
 
     const total_gastos = (gastosRes.data || []).reduce((s, g) => s + (g.monto || 0), 0)
     const total_retiros = (retirosRes.data || []).reduce((s, r) => s + (r.monto || 0), 0)
-    const monto_apertura = aperturaRes.data?.monto || 0
-    const apertura_registrada = !!aperturaRes.data
+    let monto_apertura = aperturaRes.data?.monto
+    let apertura_registrada = !!aperturaRes.data
+
+    // Si no hay apertura registrada hoy, buscar el último cierre histórico como saldo base
+    if (!apertura_registrada) {
+      const { data: ultimoCierre } = await supabase
+        .from('cierres_caja')
+        .select('caja')
+        .order('fecha', { ascending: false })
+        .limit(1)
+        .single()
+      
+      monto_apertura = ultimoCierre ? Number(ultimoCierre.caja || 0) : 0
+    }
 
     const caja_efectivo_final = monto_apertura + ingresos_efectivo - total_gastos - total_retiros
 

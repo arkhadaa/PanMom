@@ -20,15 +20,21 @@ export async function listarRetirosHoy() {
   return data || []
 }
 
-/** Registra un retiro de caja. */
-export async function registrarRetiro({ monto, descripcion, usuario }) {
+/** Registra un retiro de caja o movimiento histórico. */
+export async function registrarRetiro({ monto, descripcion, usuario, metodo_pago, origen, fecha_operacion }) {
+  const insertData = {
+    monto:           Number(monto) || 0,
+    descripcion:     descripcion?.trim() || null,
+    usuario:         usuario || 'sistema',
+    metodo_pago:     metodo_pago || 'efectivo',
+    origen:          origen?.trim() || 'retiro',
+    fecha_operacion: fecha_operacion ? new Date(fecha_operacion).toISOString() : new Date().toISOString(),
+    fecha:           fecha_operacion ? new Date(fecha_operacion).toISOString() : new Date().toISOString(), // retrocompatibilidad
+  }
+
   const { data, error } = await supabase
     .from('retiros')
-    .insert({
-      monto:       Math.round(Number(monto) || 0),
-      descripcion: descripcion?.trim() || null,
-      usuario:     usuario || 'sistema',
-    })
+    .insert(insertData)
     .select()
     .single()
   if (error) throw error

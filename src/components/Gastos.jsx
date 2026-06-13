@@ -15,6 +15,8 @@ export default function Gastos({ onGastosChange }) {
   const [gastos, setGastos]           = useState([])
   const [descripcion, setDescripcion] = useState('')
   const [monto, setMonto]             = useState('')
+  const [metodoPago, setMetodoPago]   = useState('efectivo')
+  const [fechaOperacion, setFechaOperacion] = useState(new Date().toISOString().split('T')[0])
   const [guardando, setGuardando]     = useState(false)
   const [exito, setExito]             = useState(false)
   const [cargando, setCargando]       = useState(true)
@@ -38,12 +40,13 @@ export default function Gastos({ onGastosChange }) {
     if (!descripcion.trim() || !monto || guardando) return
     setGuardando(true)
     try {
-      const nuevo = await registrarGasto({ descripcion, monto: Number(monto) })
+      const nuevo = await registrarGasto({ descripcion, monto: Number(monto), metodo_pago: metodoPago, fecha_operacion: fechaOperacion })
       const nuevaLista = [nuevo, ...gastos]
       setGastos(nuevaLista)
       onGastosChange?.(nuevaLista)
       setDescripcion('')
       setMonto('')
+      setMetodoPago('efectivo')
       setExito(true)
       setTimeout(() => setExito(false), 1800)
     } catch (e) { console.error(e) }
@@ -97,15 +100,33 @@ export default function Gastos({ onGastosChange }) {
           required
         />
 
-        {/* Monto */}
-        <div className="flex gap-2">
+        {/* Monto, Medio y Fecha */}
+        <div className="grid grid-cols-2 gap-2">
           <input
             type="number"
             value={monto}
             onChange={e => setMonto(e.target.value)}
-            placeholder="Monto en pesos  Ej: 15235"
-            className="input-field flex-1"
+            placeholder="$ Monto"
+            className="input-field"
             min={1}
+            required
+          />
+          <select 
+            value={metodoPago} 
+            onChange={e => setMetodoPago(e.target.value)}
+            className="input-field"
+          >
+            <option value="efectivo">Efectivo (Caja)</option>
+            <option value="transferencia">Transferencia (Banco)</option>
+          </select>
+        </div>
+        
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={fechaOperacion}
+            onChange={e => setFechaOperacion(e.target.value)}
+            className="input-field flex-1"
             required
           />
           <button

@@ -147,11 +147,13 @@ function TarjetaPedido({ pedido, onActualizar, onEditar, onEliminar, esAdmin, us
     setCargandoAccion('estado')
     try {
       const updated = await actualizarEstado(pedido.id, sigEstado, usuarioActual?.nombre || 'sistema')
-      onActualizar(updated)
+      onActualizar({ ...pedido, ...updated })
     } catch (err) {
       console.error(err)
-    } finally {
       setCargandoAccion(null)
+    } finally {
+      // Retrasar la reactivación del botón para prevenir doble-clicks rápidos y race conditions
+      setTimeout(() => setCargandoAccion(null), 600)
     }
   }
 

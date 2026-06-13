@@ -46,7 +46,10 @@ export default function Header({ tabActivo, setTabActivo, conectado, usuarioActu
 
   const tabsMenu = []
   if (verVentas) tabsMenu.push({ id: 'ventas', label: 'Ventas', Icon: ShoppingBag })
-  if (verFinanzas) tabsMenu.push({ id: 'finanzas', label: 'Finanzas', Icon: PieChart })
+  if (verFinanzas) {
+    tabsMenu.push({ id: 'finanzas', label: 'Finanzas', Icon: PieChart })
+    tabsMenu.push({ id: 'superadmin', label: 'Super Admin (Beta)', Icon: PieChart })
+  }
   if (verHistorial) tabsMenu.push({ id: 'historial', label: 'Cierres', Icon: Archive })
   if (verCostos) tabsMenu.push({ id: 'costos', label: 'Config', Icon: Package })
   if (verAuditoria) tabsMenu.push({ id: 'auditoria', label: 'Auditoría', Icon: ShieldCheck })

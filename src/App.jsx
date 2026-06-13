@@ -18,6 +18,7 @@ import Deudas from './components/Deudas'
 import HistorialCierres from './components/HistorialCierres'
 import Finanzas from './components/Finanzas'
 import Auditoria from './components/Auditoria'
+import SuperAdmin from './components/SuperAdmin'
 import Ventas from './components/Ventas'
 import { useSwipe } from './hooks/useSwipe'
 import {
@@ -133,13 +134,11 @@ export default function App() {
 
   const [animacionSlide, setAnimacionSlide] = useState('animate-fade-in')
 
-  // ── Navegación por Gestos (Swipe) ──
-  const swipeTabs = ['dashboard', 'pedidos', 'agregar'];
+  const swipeTabs = ['dashboard', 'pedidos', 'agregar']
   if (['productor', 'superadmin'].includes(usuarioActual?.rol)) {
-    swipeTabs.push('produccion');
+    swipeTabs.push('produccion')
   }
-  swipeTabs.push('deudas');
-
+  swipeTabs.push('deudas')
   const cambiarTabConAnimacion = (nuevoTab) => {
     const oldIdx = swipeTabs.indexOf(tabActivo)
     const newIdx = swipeTabs.indexOf(nuevoTab)
@@ -157,21 +156,6 @@ export default function App() {
 
     setTabActivo(nuevoTab)
   }
-
-  const { onTouchStart, onTouchEnd } = useSwipe({
-    onSwipeLeft: () => {
-      const idx = swipeTabs.indexOf(tabActivo);
-      if (idx !== -1 && idx < swipeTabs.length - 1) {
-        cambiarTabConAnimacion(swipeTabs[idx + 1]);
-      }
-    },
-    onSwipeRight: () => {
-      const idx = swipeTabs.indexOf(tabActivo);
-      if (idx !== -1 && idx > 0) {
-        cambiarTabConAnimacion(swipeTabs[idx - 1]);
-      }
-    }
-  });
 
   const supabaseConfigurado =
     import.meta.env.VITE_SUPABASE_URL &&
@@ -322,21 +306,24 @@ export default function App() {
       const { eventType, new: nuevo, old: viejo } = payload
       try {
         if (eventType === 'INSERT') {
-          const pedido = await obtenerPedidoConDetalle(nuevo.id)
-          // Deduplicar: si ya lo agregamos desde este dispositivo, solo actualiza
-          let eraNuevo = false
-          setPedidos(prev => {
-            if (prev.some(p => p.id === pedido.id)) {
-              return prev.map(p => p.id === pedido.id ? pedido : p)
+          // Pequeño retraso para dar tiempo a que el otro dispositivo termine de insertar items y pagos
+          setTimeout(async () => {
+            try {
+              const pedido = await obtenerPedidoConDetalle(nuevo.id)
+              setPedidos(prev => {
+                // Si el pedido ya existe localmente (lo creamos nosotros), NO lo sobreescribimos
+                // porque podríamos estar pisando la versión completa con una versión a medio guardar
+                if (prev.some(p => p.id === pedido.id)) return prev
+                
+                // Si es nuevo (de otro dispositivo), lo agregamos y notificamos
+                mostrarToast('🛒 Nuevo pedido recibido')
+                reproducirSonidoNotificacion()
+                return [pedido, ...prev]
+              })
+            } catch (err) {
+              console.warn('Error en INSERT retrasado:', err)
             }
-            eraNuevo = true
-            return [pedido, ...prev]
-          })
-          // Solo notificar si vino de otro dispositivo
-          if (eraNuevo) {
-            mostrarToast('🛒 Nuevo pedido recibido')
-            reproducirSonidoNotificacion()
-          }
+          }, 800)
         } else if (eventType === 'UPDATE') {
           const pedido = await obtenerPedidoConDetalle(nuevo.id)
           setPedidos(prev => prev.map(p => p.id === pedido.id ? pedido : p))
@@ -381,11 +368,7 @@ export default function App() {
   }
 
   return (
-    <div 
-      className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800 pb-20 md:pb-0 overflow-x-hidden"
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
-    >
+    <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800 pb-20 md:pb-0 overflow-x-hidden">
       <Header 
         tabActivo={tabActivo} 
         setTabActivo={cambiarTabConAnimacion} 
@@ -492,6 +475,10 @@ export default function App() {
             cajaHoy={cajaHoy}
             usuarioActual={usuarioActual}
           />
+        )}
+
+        {tabActivo === 'superadmin' && usuarioActual?.rol === 'superadmin' && (
+          <SuperAdmin />
         )}
 
         {tabActivo === 'deudas' && (

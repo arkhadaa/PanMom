@@ -113,9 +113,9 @@ function TarjetaProducto({ producto, cantidad, onChange, colorTheme, stockDispon
 export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioActual, produccion = [], pedidos = [] }) {
   const [productos, setProductos]   = useState([])
   const [cantidades, setCantidades] = useState({}) // { producto_id: cantidad }
-  const [nombreCliente, setNombre]  = useState('Público General')
-  // 'fiado' | 'efectivo' | 'transferencia' | 'mixto'
-  const [metodoPago, setMetodoPago] = useState('efectivo')
+  const [nombreCliente, setNombre]  = useState('')
+  const [telefonoCliente, setTelefono] = useState('')
+  const [metodoPago, setMetodoPago] = useState('fiado')
   const [montoEfectivo, setMontoEfectivo] = useState('')
 
   const [horaEntrega, setHoraEntrega] = useState('')
@@ -229,9 +229,9 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
     await enqueueTask('PEDIDO', pedidoInfo, descripcion)
 
     // 2. Limpiar el formulario instantáneamente
-    setNombre('Público General')
-    setCantidades({})
-    setMetodoPago('efectivo')
+    setNombre('')
+    setTelefono('')
+    setMetodoPago('fiado')
     setMontoEfectivo('')
     setNotas('')
   }
@@ -379,7 +379,7 @@ export default function AgregarPedido({ onPedidoCreado, onIrAPedidos, usuarioAct
             <button
               type="button"
               onClick={() => {
-                setNombre('Público General')
+                setNombre('')
                 setMostrarSugerencias(false)
               }}
               className={`
